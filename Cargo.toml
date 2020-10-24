@@ -9,6 +9,9 @@ homepage = "http://www.visioncortex.org/"
 repository = "https://github.com/visioncortex/visioncortex/"
 categories = ["graphics", "computer-vision"]
 keywords = ["computer-graphics", "computer-vision"]
+exclude = [
+    "docs/*",
+]
 
 [lib]
 crate-type = ["rlib"]
