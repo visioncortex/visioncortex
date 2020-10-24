@@ -1,0 +1,19 @@
+[package]
+name = "visioncortex"
+version = "0.1.0"
+authors = ["Chris Tsang <tyt2y7@gmail.com>"]
+edition = "2018"
+description = "Semantic Computer Vision"
+license = "MIT OR Apache-2.0"
+homepage = "http://www.visioncortex.org/"
+repository = "https://github.com/visioncortex/visioncortex/"
+keywords = ["computer-vision", "computer-graphics"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+bit-vec = "0.6"
+log = "0.4"
+num-traits = "0.2"
+flo_curves = "0.3"
