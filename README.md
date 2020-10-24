@@ -1,3 +1,3 @@
 # Vision Cortex - Semantic Computer Vision
 
-Core library to be used by vision & graphics applications.
+Core library for computer graphics & vision applications
