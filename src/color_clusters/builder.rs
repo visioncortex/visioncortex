@@ -1,94 +1,94 @@
 use crate::{Color, ColorImage};
 use super::{Cluster, Clusters, ClustersView, container::ClusterIndex};
 
-    #[derive(Clone)]
-    pub struct BuilderConfig {
-        pub(crate) diagonal: bool,
-        pub(crate) batch_size: u32,
-        pub(crate) key: Color,
-    }
+#[derive(Clone)]
+pub struct BuilderConfig {
+    pub(crate) diagonal: bool,
+    pub(crate) batch_size: u32,
+    pub(crate) key: Color,
+}
 
-    impl Default for BuilderConfig {
-        fn default() -> Self {
-            Self {
-                diagonal: true,
-                batch_size: 10000,
-                key: Color::default(),
-            }
+impl Default for BuilderConfig {
+    fn default() -> Self {
+        Self {
+            diagonal: true,
+            batch_size: 10000,
+            key: Color::default(),
         }
     }
+}
 
-    pub struct NeighbourInfo {
-        pub index: ClusterIndex,
-        pub diff: i32,
-    }
+pub struct NeighbourInfo {
+    pub index: ClusterIndex,
+    pub diff: i32,
+}
 
-    type Cmp = Box<dyn Fn(Color, Color) -> bool>;
-    type Diff = Box<dyn Fn(Color, Color) -> i32>;
-    type Deepen = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
-    type Hollow = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
+type Cmp = Box<dyn Fn(Color, Color) -> bool>;
+type Diff = Box<dyn Fn(Color, Color) -> i32>;
+type Deepen = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
+type Hollow = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
 
-    #[derive(Default)]
-    pub struct Builder {
-        pub(crate) conf: BuilderConfig,
-        pub(crate) same: Option<Cmp>,
-        pub(crate) diff: Option<Diff>,
-        pub(crate) deepen: Option<Deepen>,
-        pub(crate) hollow: Option<Hollow>,
-        pub(crate) image: Option<ColorImage>,
-    }
+#[derive(Default)]
+pub struct Builder {
+    pub(crate) conf: BuilderConfig,
+    pub(crate) same: Option<Cmp>,
+    pub(crate) diff: Option<Diff>,
+    pub(crate) deepen: Option<Deepen>,
+    pub(crate) hollow: Option<Hollow>,
+    pub(crate) image: Option<ColorImage>,
+}
 
-    pub struct IncrementalBuilder {
-        builder_impl: Option<Box<BuilderImpl>>,
-    }
+pub struct IncrementalBuilder {
+    builder_impl: Option<Box<BuilderImpl>>,
+}
 
-    macro_rules! config_setter {
-        ($name:ident, $t:ty) => {
-            pub fn $name(mut self, $name: $t) -> Self {
-                self.conf.$name = $name;
-                self
-            }
-        };
-    }
-
-    macro_rules! closure_setter {
-        ($name:ident, $t:path) => {
-            pub fn $name(mut self, $name: impl $t + 'static) -> Self {
-                self.$name = Some(Box::new($name));
-                self
-            }
-        };
-    }
-
-    impl Builder {
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        pub fn from(mut self, image: ColorImage) -> Self {
-            self.image = Some(image);
+macro_rules! config_setter {
+    ($name:ident, $t:ty) => {
+        pub fn $name(mut self, $name: $t) -> Self {
+            self.conf.$name = $name;
             self
         }
+    };
+}
 
-        pub fn run(self) -> Clusters {
-            let mut bimpl = BuilderImpl::from(self);
-            while !bimpl.tick() {}
-            bimpl.result()
+macro_rules! closure_setter {
+    ($name:ident, $t:path) => {
+        pub fn $name(mut self, $name: impl $t + 'static) -> Self {
+            self.$name = Some(Box::new($name));
+            self
         }
+    };
+}
 
-        pub fn start(self) -> IncrementalBuilder {
-            IncrementalBuilder::new(BuilderImpl::from(self))
-        }
-
-        config_setter!(diagonal, bool);
-        config_setter!(batch_size, u32);
-        config_setter!(key, Color);
-
-        closure_setter!(same, Fn(Color, Color) -> bool);
-        closure_setter!(diff, Fn(Color, Color) -> i32);
-        closure_setter!(deepen, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
-        closure_setter!(hollow, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
+impl Builder {
+    pub fn new() -> Self {
+        Self::default()
     }
+
+    pub fn from(mut self, image: ColorImage) -> Self {
+        self.image = Some(image);
+        self
+    }
+
+    pub fn run(self) -> Clusters {
+        let mut bimpl = BuilderImpl::from(self);
+        while !bimpl.tick() {}
+        bimpl.result()
+    }
+
+    pub fn start(self) -> IncrementalBuilder {
+        IncrementalBuilder::new(BuilderImpl::from(self))
+    }
+
+    config_setter!(diagonal, bool);
+    config_setter!(batch_size, u32);
+    config_setter!(key, Color);
+
+    closure_setter!(same, Fn(Color, Color) -> bool);
+    closure_setter!(diff, Fn(Color, Color) -> i32);
+    closure_setter!(deepen, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
+    closure_setter!(hollow, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
+}
 
 impl IncrementalBuilder {
     fn new(builder_impl: BuilderImpl) -> Self {
