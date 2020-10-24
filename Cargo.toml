@@ -7,7 +7,8 @@ description = "Semantic Computer Vision"
 license = "MIT OR Apache-2.0"
 homepage = "http://www.visioncortex.org/"
 repository = "https://github.com/visioncortex/visioncortex/"
-keywords = ["computer-vision", "computer-graphics"]
+categories = ["graphics", "computer-vision"]
+keywords = ["computer-graphics", "computer-vision"]
 
 [lib]
 crate-type = ["rlib"]
