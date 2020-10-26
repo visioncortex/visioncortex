@@ -1,5 +1,38 @@
+//! Contains functions and data structures for partitioning items into groups.
+//!
+//! The symbols in this module is part of visioncortex's public API, but are generally
+//! only useful for internal implementations.
 use std::{hash::Hash, collections::HashMap};
 
+/// Groups items with a key extraction function and a equivalence testing function on the keys.
+/// See the documentation of `group_by` for the requirements of the testing function.
+///
+/// During grouping, the key function is called only once per element.
+///
+/// For simple key functions, `group_by` is likely to be faster.
+///
+/// # Example
+/// ```
+/// let points = vec![1,1,7,9,24,1,4,7,3,8];
+/// let groups = group_by_cached_key(points, |&x| x, |&x, &y| {
+///     (x - y) * (x - y) < 2
+/// });
+/// // should be grouped as below:
+/// // {1, 1, 1}, {3, 4}, {7, 7, 8, 9}, {24}
+/// for mut group in groups {
+///     println!("{:?}", group);
+///     group.sort();
+///     if group.len() == 4 {
+///         assert_eq!(group, [7, 7, 8, 9]);
+///     } else if group.len() == 3 {
+///         assert_eq!(group, [1, 1, 1]);
+///     } else if group.len() == 2 {
+///         assert_eq!(group, [3, 4]);
+///     } else {
+///         assert_eq!(group, [24]);
+///     }
+/// }
+/// ```
 pub fn group_by_cached_key<T, Key, Extract, Group> (
     items: Vec<T>,
     extract_key: Extract,
@@ -23,6 +56,34 @@ where
         .collect()
 }
 
+/// Groups items with a equivalence testing function.
+///
+/// The testing function should define a equivalence relation `~` on the set of elements
+/// and return true for elements `a` and `b` if-and-only-if `a ~ b`.
+/// This implies that the function is commutative, i.e. `should_group(a, b) == should_group(b, a`).
+///
+/// # Example
+/// ```
+/// let points = vec![1,1,7,9,24,1,4,7,3,8];
+/// let groups = group_by(points, |&x, &y| {
+///     (x - y) * (x - y) < 2
+/// });
+/// // should be grouped as below:
+/// // {1, 1, 1}, {3, 4}, {7, 7, 8, 9}, {24}
+/// for mut group in groups {
+///     println!("{:?}", group);
+///     group.sort();
+///     if group.len() == 4 {
+///         assert_eq!(group, [7, 7, 8, 9]);
+///     } else if group.len() == 3 {
+///         assert_eq!(group, [1, 1, 1]);
+///     } else if group.len() == 2 {
+///         assert_eq!(group, [3, 4]);
+///     } else {
+///         assert_eq!(group, [24]);
+///     }
+/// }
+/// ```
 pub fn group_by<T, F>(mut items: Vec<T>, should_group: F) -> Vec<Vec<T>> 
 where
     F: Fn(&T, &T) -> bool,
