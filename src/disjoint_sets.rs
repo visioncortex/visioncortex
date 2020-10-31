@@ -13,6 +13,7 @@ use std::{hash::Hash, collections::HashMap};
 ///
 /// # Example
 /// ```
+/// use visioncortex::disjoint_sets::group_by_cached_key;
 /// let points = vec![1,1,7,9,24,1,4,7,3,8];
 /// let groups = group_by_cached_key(points, |&x| x, |&x, &y| {
 ///     (x - y) * (x - y) < 2
@@ -64,6 +65,7 @@ where
 ///
 /// # Example
 /// ```
+/// use visioncortex::disjoint_sets::group_by;
 /// let points = vec![1,1,7,9,24,1,4,7,3,8];
 /// let groups = group_by(points, |&x, &y| {
 ///     (x - y) * (x - y) < 2
