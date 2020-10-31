@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::{Color, ColorImage};
 use super::{Cluster, Clusters, ClustersView, container::ClusterIndex};
 
@@ -329,7 +330,6 @@ impl BuilderImpl {
         let cur_area = self.cluster_areas[self.iteration as usize].area;
 
         for index in 0..self.clusters.len() {
-            use std::collections::HashMap;
 
             if self.clusters[index].area() != cur_area {
                 continue;
@@ -373,7 +373,7 @@ impl BuilderImpl {
                 continue;
             }
 
-            infos.sort_by_key(|info| info.diff);
+            infos.sort_by_key(|info| info.diff * 25600 + info.index.0 as i32);
 
             let target = infos[0].index;
 
@@ -422,7 +422,6 @@ impl BuilderImpl {
     }
 
     fn initialize_areas_before_stage2(&mut self) {
-        use std::collections::HashMap;
         let mut counts = HashMap::new();
 
         for area in self
