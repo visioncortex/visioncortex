@@ -1,8 +1,13 @@
-![logo](docs/visioncortex-banner.png)
+<div align="center">
 
-# Vision Cortex - Semantic Computer Vision
+  <img src="docs/visioncortex-banner.png">
+  <h1>Vision Cortex - Semantic Computer Vision</h1>
 
-Core library for computer graphics & vision applications.
+  <p>
+    <strong>Core library for computer graphics & vision applications</strong>
+  </p>
+
+</div>
 
 This library is still in early stage, and we are continually improving it.
 
