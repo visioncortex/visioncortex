@@ -1,6 +1,8 @@
 use crate::{PathI32, PointI32};
 
-pub struct PathSimplify;
+use super::util::signed_area;
+
+pub(crate) struct PathSimplify;
 
 #[derive(Copy, Clone, Debug)]
 pub enum PathSimplifyMode {
@@ -24,6 +26,10 @@ impl Default for PathSimplifyMode {
 }
 
 impl PathSimplify {
+
+    /// Returns a copy of a path after removing 1-pixel staircases.
+    /// 
+    /// Also takes a bool representing clockwiseness of path traversal because VTracer always takes
     pub fn remove_staircase(path: &PathI32, clockwise: bool) -> PathI32 {
         let path = &path.path;
         let len = path.len();
@@ -32,7 +38,7 @@ impl PathSimplify {
             (path[i].x - path[j].x).abs() + (path[i].y - path[j].y).abs()
         };
 
-        let mut result = PathI32::new_empty();
+        let mut result = PathI32::new();
         if len == 0 {
             return result;
         }
@@ -54,17 +60,17 @@ impl PathSimplify {
         result
     }
 
-    pub fn simplify(path: &PathI32) -> PathI32 {
+    pub fn limit_penalties(path: &PathI32) -> PathI32 {
         let tolerance = 1.0;
         let path = &path.path;
         let len = path.len();
         let past_delta = |from: usize, to: usize| -> f64 {
             (from..to).skip(1).map(|i| {
-                penalty(path[from], path[i], path[to])
+                Self::evaluate_penalty(path[from], path[i], path[to])
             }).fold(0.0, |a, b| a.max(b)) // find max
         };
 
-        let mut result = PathI32::new_empty();
+        let mut result = PathI32::new();
         if len == 0 {
             return result;
         }
@@ -84,19 +90,14 @@ impl PathSimplify {
         }
         result
     }
-}
 
-/// assume origin is top left corner, signed_area > 0 imply clockwise
-fn signed_area(p1: PointI32, p2: PointI32, p3: PointI32) -> i32 {
-    (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y)
-}
-
-fn penalty(a: PointI32, b: PointI32, c: PointI32) -> f64 {
-    let sq = |x| { (x * x) as f64 };
-    let l1 = (sq(a.x - b.x) + sq(a.y - b.y)).sqrt();
-    let l2 = (sq(b.x - c.x) + sq(b.y - c.y)).sqrt();
-    let l3 = (sq(c.x - a.x) + sq(c.y - a.y)).sqrt();
-    let p = (l1 + l2 + l3) / 2.0;
-    let area = (p * (p - l1) * (p - l2) * (p - l3)).sqrt();
-    area * area / l3
+    fn evaluate_penalty(a: PointI32, b: PointI32, c: PointI32) -> f64 {
+        let sq = |x| { (x * x) as f64 };
+        let l1 = (sq(a.x - b.x) + sq(a.y - b.y)).sqrt();
+        let l2 = (sq(b.x - c.x) + sq(b.y - c.y)).sqrt();
+        let l3 = (sq(c.x - a.x) + sq(c.y - a.y)).sqrt();
+        let p = (l1 + l2 + l3) / 2.0;
+        let area = (p * (p - l1) * (p - l2) * (p - l3)).sqrt();
+        area * area / l3
+    }
 }

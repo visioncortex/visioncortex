@@ -1,11 +1,24 @@
 use num_traits::Float;
-use std::ops::*;
+use std::{fmt::Display, ops::*};
 
 /// Generic point in 2D space
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point2<T> {
     pub x: T,
     pub y: T,
+}
+
+pub trait ToSvgString {
+    fn to_svg_string(&self) -> String;
+}
+
+impl<T> ToSvgString for Point2<T> 
+where
+    T: Display
+{
+    fn to_svg_string(&self) -> String {
+        format!("{},{}", self.x, self.y)
+    }
 }
 
 impl<T> Point2<T> {

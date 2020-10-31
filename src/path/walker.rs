@@ -1,5 +1,6 @@
 use crate::{BinaryImage, PointI32};
 
+/// Handles Path Walking with straight run optimization
 pub struct PathWalker<'a> {
     image: &'a BinaryImage,
     start: PointI32,

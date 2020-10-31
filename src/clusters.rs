@@ -1,4 +1,4 @@
-use crate::{BinaryImage, BoundingRect, MonoImage, MonoImageItem, PathI32, PathSimplifyMode, PointF64, PointI32, Shape, Spline};
+use crate::{BinaryImage, BoundingRect, MonoImage, MonoImageItem, PathI32, PathSimplifyMode, PointI32, Shape, Spline};
 
 /// A cluster of binary image pixels
 #[derive(Default)]
@@ -136,9 +136,8 @@ impl Cluster {
         }
         let mut splines = vec![];
         for (i, (image, offset)) in boundaries.iter_mut().enumerate() {
-			let mut spline = Spline::image_to_path(image, i == 0, corner_threshold, length_threshold, max_iterations, splice_threshold);
-			let offset = &PointF64 {x: offset.x as f64, y: offset.y as f64};
-            spline.offset(offset);
+			let mut spline = Spline::from_image(image, i == 0, corner_threshold, length_threshold, max_iterations, splice_threshold);
+            spline.offset_by_pointi32(offset);
             if !spline.is_empty() {
                 splines.push(spline);
             }
