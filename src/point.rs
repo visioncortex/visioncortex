@@ -133,6 +133,18 @@ pub type PointF32 = Point2<f32>;
 /// 2D Point with `f64` component
 pub type PointF64 = Point2<f64>;
 
+impl PointI32 {
+    pub fn to_point_f64(&self) -> PointF64 {
+        PointF64 { x: self.x as f64, y: self.y as f64 }
+    }
+}
+
+impl PointF64 {
+    pub fn to_point_i32(&self) -> PointI32 {
+        PointI32 { x: self.x as i32, y: self.y as i32 }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

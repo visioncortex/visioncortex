@@ -1,4 +1,4 @@
-use crate::{BinaryImage, BoundingRect, MonoImage, MonoImageItem, PathI32, PathSimplifyMode, PointI32, Shape, Spline};
+use crate::{BinaryImage, BoundingRect, CompoundPath, MonoImage, MonoImageItem, PathI32, PathSimplifyMode, PointI32, Shape, Spline};
 
 /// A cluster of binary image pixels
 #[derive(Default)]
@@ -52,33 +52,58 @@ impl Cluster {
         self.rect.translate(o);
     }
 
-    pub fn to_svg_path(&self, mode: PathSimplifyMode, corner_threshold: f64, length_threshold: f64, max_iterations: usize, splice_threshold: f64) -> String {
+    pub fn to_compound_path(
+        &self,
+        mode: PathSimplifyMode,
+        corner_threshold: f64,
+        length_threshold: f64,
+        max_iterations: usize,
+        splice_threshold: f64
+    ) -> CompoundPath {
         let origin = PointI32 {
             x: self.rect.left,
             y: self.rect.top,
         };
-        Self::svg_path_static(&origin, &self.to_binary_image(), mode, corner_threshold, length_threshold, max_iterations, splice_threshold)
+        Self::compound_path_static(
+            &origin,
+            &self.to_binary_image(),
+            mode,
+            corner_threshold,
+            length_threshold,
+            max_iterations,
+            splice_threshold
+        )
     }
 
-    pub fn svg_path_static(origin: &PointI32, image: &BinaryImage, mode: PathSimplifyMode, corner_threshold: f64, length_threshold: f64, max_iterations: usize, splice_threshold: f64) -> String {
-		match mode {
-			PathSimplifyMode::Spline => {
-				let splines = Self::splines_static(image, corner_threshold, length_threshold, max_iterations, splice_threshold);
-				let mut svg_paths = vec![];
-				for path in splines.iter() {
-					svg_paths.push(path.to_svg_path(false, origin))
-				}
-				svg_paths.concat()
-			},
-			PathSimplifyMode::None | PathSimplifyMode::Polygon => {
-				let paths = Self::paths_static(image, mode);
-				let mut svg_paths = vec![];
-				for path in paths.iter() {
-					svg_paths.push(path.to_svg_path(false, origin))
-				}
-				svg_paths.concat()
-			}
-		}
+    pub fn compound_path_static(
+        offset: &PointI32,
+        image: &BinaryImage,
+        mode: PathSimplifyMode,
+        corner_threshold: f64,
+        length_threshold: f64,
+        max_iterations: usize,
+        splice_threshold: f64
+    ) -> CompoundPath {
+        match mode {
+            PathSimplifyMode::None | PathSimplifyMode::Polygon => {
+                let paths = Self::paths_static(image, mode);
+                let mut group = CompoundPath::new();
+                for mut path in paths.into_iter() {
+                    path.offset(&offset);
+                    group.add_path_i32(path);
+                }
+                group
+            },
+            PathSimplifyMode::Spline => {
+                let splines = Self::splines_static(image, corner_threshold, length_threshold, max_iterations, splice_threshold);
+                let mut group = CompoundPath::new();
+                for mut spline in splines.into_iter() {
+                    spline.offset(&offset.to_point_f64());
+                    group.add_spline(spline);
+                }
+                group
+            },
+        }
     }
 
     pub fn paths_static(image: &BinaryImage, mode: PathSimplifyMode) -> Vec<PathI32> {
@@ -111,8 +136,8 @@ impl Cluster {
             }
         }
         paths
-	}
-	
+    }
+
     pub fn splines_static(image: &BinaryImage, corner_threshold: f64, length_threshold: f64, max_iterations:usize, splice_threshold: f64) -> Vec<Spline> {
         let mut boundaries = vec![(image.clone(), PointI32 { x: 0, y: 0 })];
         let holes = image.negative().to_clusters(false);
@@ -136,8 +161,8 @@ impl Cluster {
         }
         let mut splines = vec![];
         for (i, (image, offset)) in boundaries.iter_mut().enumerate() {
-			let mut spline = Spline::from_image(image, i == 0, corner_threshold, length_threshold, max_iterations, splice_threshold);
-            spline.offset_by_pointi32(offset);
+            let mut spline = Spline::from_image(image, i == 0, corner_threshold, length_threshold, max_iterations, splice_threshold);
+            spline.offset(&offset.to_point_f64());
             if !spline.is_empty() {
                 splines.push(spline);
             }
@@ -313,23 +338,6 @@ impl BinaryImage {
         let clusters = clusters.into_iter().filter(|c| c.size() != 0).collect();
 
         Clusters { clusters, rect }
-    }
-
-    pub fn to_svg_path(&self,
-        mode: PathSimplifyMode,
-        corner_threshold: f64,
-        length_threshold: f64,
-        max_iterations: usize,
-        splice_threshold: f64
-    ) -> String {
-        let clusters = self.to_clusters(false);
-        clusters.iter().map(|c| c.to_svg_path(
-            mode,
-            corner_threshold,
-            length_threshold,
-            max_iterations,
-            splice_threshold
-        )).collect()
     }
 }
 

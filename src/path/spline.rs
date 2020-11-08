@@ -1,5 +1,5 @@
-use std::{cmp::Ordering};
-use crate::{BinaryImage, PathF64, PointF64, PointI32, PathSimplifyMode};
+use std::cmp::Ordering;
+use crate::{BinaryImage, PathF64, PointF64, PathSimplifyMode};
 use super::{PathI32, smooth::SubdivideSmooth};
 
 #[derive(Default)]
@@ -47,17 +47,8 @@ impl Spline {
         self.points.len() <= 3
     }
 
-    /// Applies an offset (point f64) to all points on the spline
-    pub fn offset_by_pointf64(&mut self, offset: &PointF64) {
-        for path in self.points.iter_mut() {
-            path.x += offset.x;
-            path.y += offset.y;
-        }
-    }
-
-    /// Applies an offset (point i32) to all points on the spline
-    pub fn offset_by_pointi32(&mut self, offset: &PointI32) {
-        let offset = PointF64 {x: offset.x as f64, y: offset.y as f64};
+    /// Applies an offset to all points on the spline
+    pub fn offset(&mut self, offset: &PointF64) {
         for path in self.points.iter_mut() {
             path.x += offset.x;
             path.y += offset.y;
@@ -133,33 +124,35 @@ impl Spline {
     }
 
     /// Converts spline to svg path. Panic if the length of spline is not valid (not 1+3n for some integer n)
-    pub fn to_svg_path(&self, close: bool, offset: &PointI32) -> String {
+    pub fn to_svg_string(&self, close: bool, offset: &PointF64) -> String {
 
-        let o = PointF64 { x: offset.x as f64, y: offset.y as f64 };
+        let o = offset;
 
         if self.is_empty() {
             return String::from("");
         }
 
-        if (self.len()-1)%3 != 0 {
-            panic!("Invalid spline! Length must be 1+3k.");
+        if (self.len() - 1) % 3 != 0 {
+            panic!("Invalid spline! Length must be 1+3n.");
         }
-        
+
         let points = &self.points;
         let len = points.len();
         let mut result: Vec<String> = vec![format!("M{} {} ", points[0].x + o.x, points[0].y + o.y)];
 
         let mut i = 1;
         while i < len {
-            result.push(format!("C{} {} {} {} {} {} ",
-                            points[i].x + o.x, points[i].y + o.y,
-                            points[i+1].x + o.x, points[i+1].y + o.y,
-                            points[i+2].x + o.x, points[i+2].y + o.y));
+            result.push(
+                format!("C{} {} {} {} {} {} ",
+                points[i].x + o.x, points[i].y + o.y,
+                points[i+1].x + o.x, points[i+1].y + o.y,
+                points[i+2].x + o.x, points[i+2].y + o.y)
+            );
             i += 3;
         }
 
         if close {
-            result.push(String::from("Z"));
+            result.push(String::from("Z "));
         }
 
         result.concat()

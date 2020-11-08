@@ -1,4 +1,4 @@
-use crate::{BinaryImage, BoundingRect, Color, ColorSum, PointI32, PathSimplifyMode, Shape};
+use crate::{BinaryImage, BoundingRect, Color, ColorSum, CompoundPath, PointI32, PathSimplifyMode, Shape};
 use crate::clusters::Cluster as BinaryCluster;
 use super::container::{ClusterIndex, ClustersView};
 
@@ -119,7 +119,7 @@ impl Cluster {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn to_svg_path(&self,
+    pub fn to_compound_path(&self,
         parent: &ClustersView,
         hole: bool,
         mode: PathSimplifyMode,
@@ -127,21 +127,17 @@ impl Cluster {
         length_threshold: f64,
         max_iterations: usize,
         splice_threshold: f64
-    ) -> String {
-        let origin = PointI32 {
-            x: self.rect.left,
-            y: self.rect.top,
-        };
-        let mut svg_paths = vec![];
+    ) -> CompoundPath {
+        let mut paths = CompoundPath::new();
         for cluster in self.to_image_with_hole(parent, hole).to_clusters(false).iter() {
-            svg_paths.push(
-                BinaryCluster::svg_path_static(&PointI32 {
-                    x: origin.x + cluster.rect.left,
-                    y: origin.y + cluster.rect.top,
-				}, &cluster.to_binary_image(), mode,
-				corner_threshold, length_threshold, max_iterations, splice_threshold)
+            paths.append(
+                BinaryCluster::compound_path_static(&PointI32 {
+                    x: self.rect.left + cluster.rect.left,
+                    y: self.rect.top + cluster.rect.top,
+                }, &cluster.to_binary_image(), mode,
+                corner_threshold, length_threshold, max_iterations, splice_threshold)
             );
         }
-        svg_paths.concat()
+        paths
     }
 }

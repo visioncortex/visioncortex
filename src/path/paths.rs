@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::ops::{Add, AddAssign};
 
 use crate::{BinaryImage, PointF64, PointI32, Shape, ToSvgString};
@@ -9,6 +10,11 @@ pub struct Path<T> {
     /// T can be PointI32/PointF64, etc. (see src/point.rs).
     pub path: Vec<T>,
 }
+
+/// Path of 2D PointI32
+pub type PathI32 = Path<PointI32>;
+/// Path of 2D PointF64
+pub type PathF64 = Path<PointF64>;
 
 impl<T> Path<T>
 {
@@ -61,33 +67,28 @@ where
     /// Takes a bool to indicate whether the end should be wrapped back to start.
     /// 
     /// An offset is specified to apply an offset to the display points (useful when displaying on canvas elements).
-    pub fn to_svg_path(&self, close: bool, offset: &T) -> String {
-        let o = offset;
-        [
-            self.path
-                .iter()
-                .take(1)
-                .map(|p| format!("M{} ", (*p+*o).to_svg_string()))
-                .collect::<String>(),
-            self.path
-                .iter()
-                .skip(1)
-                .map(|p| format!("L{} ", (*p+*o).to_svg_string()))
-                .collect::<String>(),
-            if close {
-                "Z ".to_owned()
-            } else {
-                "".to_owned()
-            },
-        ]
-        .concat()
+    pub fn to_svg_string(&self, close: bool, offset: &T) -> String {
+        let o = *offset;
+        let mut string = String::new();
+
+        self.path
+            .iter()
+            .take(1)
+            .for_each(|p| write!(&mut string, "M{} ", (*p+o).to_svg_string()).unwrap());
+
+        self.path
+            .iter()
+            .skip(1)
+            .take(self.path.len() - if close { 2 } else { 1 })
+            .for_each(|p| write!(&mut string, "L{} ", (*p+o).to_svg_string()).unwrap());
+
+        if close {
+            write!(&mut string, "Z ").unwrap();
+        }
+
+        string
     }
 }
-
-/// Path of 2D PointI32
-pub type PathI32 = Path<PointI32>;
-/// Path of 2D PointF64
-pub type PathF64 = Path<PointF64>;
 
 impl PathI32 {
 
@@ -152,5 +153,38 @@ impl PathI32 {
             path.extend(walker);
         }
         PathI32 { path }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_svg_string() {
+        let mut path = PathI32::new();
+        path.add(PointI32 { x: 0, y: 0 });
+        path.add(PointI32 { x: 1, y: 0 });
+        path.add(PointI32 { x: 1, y: 1 });
+        assert_eq!("M0,0 L1,0 L1,1 ", path.to_svg_string(false, &PointI32::default()));
+    }
+
+    #[test]
+    fn test_to_svg_string_offset() {
+        let mut path = PathI32::new();
+        path.add(PointI32 { x: 0, y: 0 });
+        path.add(PointI32 { x: 1, y: 0 });
+        path.add(PointI32 { x: 1, y: 1 });
+        assert_eq!("M1,1 L2,1 L2,2 ", path.to_svg_string(false, &PointI32 { x: 1, y: 1 }));
+    }
+
+    #[test]
+    fn test_to_svg_string_closed() {
+        let mut path = PathI32::new();
+        path.add(PointI32 { x: 0, y: 0 });
+        path.add(PointI32 { x: 1, y: 0 });
+        path.add(PointI32 { x: 1, y: 1 });
+        path.add(PointI32 { x: 0, y: 0 });
+        assert_eq!("M0,0 L1,0 L1,1 Z ", path.to_svg_string(true, &PointI32::default()));
     }
 }
