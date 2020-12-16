@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use crate::{Color, ColorImage};
-use super::{Cluster, Clusters, ClustersView, container::ClusterIndex};
+use super::{Cluster, Clusters, ClustersView, container::ClusterIndex, container::ClusterIndexElem};
 
 #[derive(Clone)]
 pub struct BuilderConfig {
     pub(crate) diagonal: bool,
+    pub(crate) hierarchical: u32,
     pub(crate) batch_size: u32,
     pub(crate) key: Color,
 }
@@ -13,6 +14,7 @@ impl Default for BuilderConfig {
     fn default() -> Self {
         Self {
             diagonal: true,
+            hierarchical: HIERARCHICAL_MAX,
             batch_size: 10000,
             key: Color::default(),
         }
@@ -28,6 +30,10 @@ type Cmp = Box<dyn Fn(Color, Color) -> bool>;
 type Diff = Box<dyn Fn(Color, Color) -> i32>;
 type Deepen = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
 type Hollow = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
+
+/// the 0th cluster is reserved for internal use
+pub const ZERO: ClusterIndex = ClusterIndex(0);
+pub const HIERARCHICAL_MAX: u32 = std::u32::MAX;
 
 #[derive(Default)]
 pub struct Builder {
@@ -82,6 +88,7 @@ impl Builder {
     }
 
     config_setter!(diagonal, bool);
+    config_setter!(hierarchical, u32);
     config_setter!(batch_size, u32);
     config_setter!(key, Color);
 
@@ -102,20 +109,24 @@ impl IncrementalBuilder {
         self.builder_impl.as_mut().unwrap().tick()
     }
 
+    pub fn view(&self) -> ClustersView {
+        self.builder_impl.as_ref().unwrap().view()
+    }
+
     pub fn result(&mut self) -> Clusters {
         self.builder_impl.take().unwrap().result()
-	}
+    }
 
-	pub fn progress(&self) -> u32 {
-		match &self.builder_impl {
-			None => {
-				0
-			},
-			Some(builder) => {
-				builder.as_ref().progress()
-			}
-		}
-	}
+    pub fn progress(&self) -> u32 {
+        match &self.builder_impl {
+            None => {
+                0
+            },
+            Some(builder) => {
+                builder.as_ref().progress()
+            }
+        }
+    }
 }
 
 struct Area {
@@ -125,6 +136,7 @@ struct Area {
 
 struct BuilderImpl {
     diagonal: bool,
+    hierarchical: u32,
     batch_size: u32,
     key: Color,
     same: Cmp,
@@ -144,13 +156,14 @@ struct BuilderImpl {
 }
 
 impl From<Builder> for BuilderImpl {
-    // TODO: Provide default implementations.
+
     fn from(mut b: Builder) -> Self {
         let im = b.image.unwrap();
         let len = im.pixels.len();
 
         Self {
             diagonal: b.conf.diagonal,
+            hierarchical: b.conf.hierarchical,
             batch_size: b.conf.batch_size,
             key: b.conf.key,
             same: b.same.take().unwrap(),
@@ -176,11 +189,16 @@ impl BuilderImpl {
         match self.stage {
             1 => {
                 if self.stage_1() {
-                    self.stage += 1;
-                    self.iteration = 0;
+                    if self.hierarchical != 0 {
+                        self.stage += 1;
+                        self.iteration = 0;
+                    } else {
+                        self.stage_1_output();
+                        self.stage += 2;
+                    }
                 }
                 false
-            }
+            },
             2 => {
                 for _i in 0..std::cmp::max(1, self.iteration / 16) {
                     if self.stage_2() {
@@ -190,9 +208,17 @@ impl BuilderImpl {
                     }
                 }
                 false
-            }
+            },
             _ => true,
         }
+    }
+
+    pub fn get_cluster(&self, index: ClusterIndex) -> &Cluster {
+        &self.clusters[index.0 as usize]
+    }
+
+    pub fn get_cluster_mut(&mut self, index: ClusterIndex) -> &mut Cluster {
+        &mut self.clusters[index.0 as usize]
     }
 
     pub fn result(self) -> Clusters {
@@ -204,21 +230,32 @@ impl BuilderImpl {
             cluster_indices: self.cluster_indices,
             clusters_output: self.clusters_output,
         }
-	}
+    }
 
-	pub fn progress(&self) -> u32 {
-		match self.stage {
-			1 => {
-				50 * self.iteration / self.cluster_indices.len() as u32
-			},
-			2 => {
-				50 + 50 * self.iteration / self.cluster_areas.len() as u32
-			},
-			_ => {
-				100
-			}
-		}
-	}
+    pub fn view(&self) -> ClustersView {
+        ClustersView {
+            width: self.width,
+            height: self.height,
+            pixels: &self.pixels,
+            clusters: &self.clusters,
+            cluster_indices: &self.cluster_indices,
+            clusters_output: &self.clusters_output,
+        }
+    }
+
+    pub fn progress(&self) -> u32 {
+        match self.stage {
+            1 => {
+                50 * self.iteration / self.cluster_indices.len() as u32
+            },
+            2 => {
+                50 + 50 * self.iteration / self.cluster_areas.len() as u32
+            },
+            _ => {
+                100
+            }
+        }
+    }
 
     fn stage_1(&mut self) -> bool {
         let diagonal = self.diagonal;
@@ -238,20 +275,20 @@ impl BuilderImpl {
             let upleft = self.pixel_at(x - 1, y - 1);
 
             let mut cluster_up = if y > 0 {
-                self.cluster_indices[(self.width as i32 * (y - 1) + x) as usize].0
+                self.cluster_indices[(self.width as i32 * (y - 1) + x) as usize]
             } else {
-                0
-            } as usize;
+                ZERO
+            };
             let mut cluster_left = if x > 0 {
-                self.cluster_indices[(self.width as i32 * y + (x - 1)) as usize].0
+                self.cluster_indices[(self.width as i32 * y + (x - 1)) as usize]
             } else {
-                0
-            } as usize;
+                ZERO
+            };
             let cluster_upleft = if x > 0 && y > 0 {
-                self.cluster_indices[(self.width as i32 * (y - 1) + (x - 1)) as usize].0
+                self.cluster_indices[(self.width as i32 * (y - 1) + (x - 1)) as usize]
             } else {
-                0
-            } as usize;
+                ZERO
+            };
 
             if cluster_left != cluster_up
                 && self.is_same(left, up)
@@ -259,9 +296,9 @@ impl BuilderImpl {
                 self.is_same(color, left) &&
                 self.is_same(color, up))
             {
-                if self.clusters[cluster_left].area() <= self.clusters[cluster_up].area() {
-                    self.combine_clusters(ClusterIndex(cluster_left as u32), ClusterIndex(cluster_up as u32));
-                    if cluster_left as u32 == self.next_index.0 - 1
+                if self.get_cluster(cluster_left).area() <= self.get_cluster(cluster_up).area() {
+                    self.combine_clusters(cluster_left, cluster_up);
+                    if cluster_left.0 == self.next_index.0 - 1
                         && self.next_index.0 as usize == self.clusters.len()
                     {
                         // reduce cluster counts
@@ -269,7 +306,7 @@ impl BuilderImpl {
                     }
                     cluster_left = cluster_up;
                 } else {
-                    self.combine_clusters(ClusterIndex(cluster_up as u32), ClusterIndex(cluster_left as u32));
+                    self.combine_clusters(cluster_up, cluster_left);
                     cluster_up = cluster_left;
                 }
             }
@@ -277,16 +314,16 @@ impl BuilderImpl {
             let c = color.unwrap();
 
             if has_key && c == key {
-                self.clusters[0].add(i, &c, x, y);
+                self.get_cluster_mut(ZERO).add(i, &c, x, y);
             } else if self.is_same(color, up) && self.is_same(color, upleft) {
-                self.cluster_indices[i as usize] = ClusterIndex(cluster_up as u32);
-                self.clusters[cluster_up].add(i, &c, x, y);
+                self.cluster_indices[i as usize] = cluster_up;
+                self.get_cluster_mut(cluster_up).add(i, &c, x, y);
             } else if self.is_same(color, left) && self.is_same(color, upleft) {
-                self.cluster_indices[i as usize] = ClusterIndex(cluster_left as u32);
-                self.clusters[cluster_left].add(i, &c, x, y);
+                self.cluster_indices[i as usize] = cluster_left;
+                self.get_cluster_mut(cluster_left).add(i, &c, x, y);
             } else if diagonal && self.is_same(color, upleft) {
-                self.cluster_indices[i as usize] = ClusterIndex(cluster_upleft as u32);
-                self.clusters[cluster_upleft].add(i, &c, x, y);
+                self.cluster_indices[i as usize] = cluster_upleft;
+                self.get_cluster_mut(cluster_upleft).add(i, &c, x, y);
             } else {
                 let mut new_cluster = Cluster::new();
                 new_cluster.add(i, &c, x, y);
@@ -302,126 +339,31 @@ impl BuilderImpl {
 
         self.iteration += batch_size;
         if self.iteration as usize >= self.cluster_indices.len() {
-            self.initialize_areas_before_stage2();
+            self.prepare_stage_2();
             true
         } else {
             false
         }
     }
 
-    fn stage_2(&mut self) -> bool {
-        if self.iteration == 0 {
-            for c in self.clusters.iter_mut() {
-                c.residue = c.indices.clone();
-                c.residue_sum = c.sum;
-            }
-        }
-
-        if self.cluster_areas[self.iteration as usize].count == 0 {
-            self.iteration += 1;
-
-            if self.iteration as usize == self.cluster_areas.len() {
-                return true;
-            }
-
-            return false;
-        }
-
-        let cur_area = self.cluster_areas[self.iteration as usize].area;
-
+    fn stage_1_output(&mut self) {
+        let mut output = Vec::new();
         for index in 0..self.clusters.len() {
-
-            if self.clusters[index].area() != cur_area {
-                continue;
-            }
-
-            let mut votes = HashMap::new();
-
-            for &i in self.clusters[index].iter() {
-                let x = i % self.width;
-                let y = i / self.width;
-
-                for k in 0..4 {
-                    let k = match k {
-                        0 => if y > 0 { self.cluster_indices[(self.width * (y - 1) + x) as usize].0 } else { 0 },
-                        1 => if y < self.height - 1 { self.cluster_indices[(self.width * (y + 1) + x) as usize].0 } else { 0 },
-                        2 => if x > 0 { self.cluster_indices[(self.width * y + (x - 1)) as usize].0 } else { 0 },
-                        3 => if x < self.width - 1 { self.cluster_indices[(self.width * y + (x + 1)) as usize].0 } else { 0 },
-                        _ => unreachable!(),
-                    };
-                    if k > 0 && k as usize != index {
-                        *votes.entry(k).or_insert(0) += 1;
-                    }
-                }
-            }
-
-            let color = self.clusters[index].color();
-            let mut infos: Vec<_> = votes
-                .iter()
-                .filter(|(&k, _)| k > 0)
-                .map(|(&k, _)| NeighbourInfo {
-                    index: ClusterIndex(k),
-                    diff: (self.diff)(color, self.clusters[k as usize].color()),
-                })
-                .collect();
-
-            if infos.is_empty() {
-                if self.iteration == self.cluster_areas.len() as u32 - 1 {
-                    // this is the final background
-                    self.clusters_output.push(ClusterIndex(index as u32));
-                }
-                continue;
-            }
-
-            infos.sort_by_key(|info| info.diff * 25600 + info.index.0 as i32);
-
-            let target = infos[0].index;
-
-            let view = ClustersView {
-                width: self.width,
-                height: self.height,
-                pixels: &self.pixels,
-                clusters: &self.clusters,
-                cluster_indices: &self.cluster_indices,
-                clusters_output: &self.clusters_output,
-            };
-
-            let deepen = (self.deepen)(&view, &self.clusters[index], &infos);
-            let hollow = (self.hollow)(&view, &self.clusters[index], &infos);
-
-            if deepen {
-                self.clusters_output.push(ClusterIndex(index as u32));
-            }
-
-            let target_in_areas = self
-                .cluster_areas
-                .binary_search_by_key(&self.clusters[target.0 as usize].area(), |a| a.area)
-                .unwrap();
-
-            self.cluster_areas[target_in_areas].count -= 1;
-            self.merge_cluster_into(ClusterIndex(index as u32), target, deepen, hollow);
-            let updated_area = self.clusters[target.0 as usize].area();
-
-            match self
-                .cluster_areas
-                .binary_search_by_key(&updated_area, |a| a.area)
-            {
-                Ok(pos) => self.cluster_areas[pos].count += 1,
-                Err(pos) => self.cluster_areas.insert(
-                    pos,
-                    Area {
-                        area: updated_area,
-                        count: 1,
-                    },
-                ),
+            let index = ClusterIndex(index as ClusterIndexElem);
+            let area = self.get_cluster(index).area();
+            if area > 0 {
+                output.push((index, area));
             }
         }
-
-        self.iteration += 1;
-        self.iteration as usize == self.cluster_areas.len()
+        output.sort_by_key(|c| c.1 as u64 * 65535 + c.0.0 as u64);
+        output.iter().for_each(|c| self.clusters_output.push(c.0));
     }
 
-    fn initialize_areas_before_stage2(&mut self) {
+    fn prepare_stage_2(&mut self) {
+        for c in self.clusters.iter_mut() {
+            c.residue_sum = c.sum;
+        }
+
         let mut counts = HashMap::new();
 
         for area in self
@@ -443,11 +385,98 @@ impl BuilderImpl {
         self.cluster_areas = areas;
     }
 
+    fn stage_2(&mut self) -> bool {
+        if self.cluster_areas[self.iteration as usize].count == 0 {
+            self.iteration += 1;
+            if self.iteration as usize == self.cluster_areas.len() {
+                return true;
+            }
+            return false;
+        }
+
+        let cur_area = self.cluster_areas[self.iteration as usize].area;
+
+        for index in 0..self.clusters.len() {
+
+            let view = self.view();
+            let index = ClusterIndex(index as ClusterIndexElem);
+            let mycluster = self.get_cluster(index);
+
+            if mycluster.area() != cur_area {
+                continue;
+            }
+
+            if cur_area > self.hierarchical as usize {
+                self.clusters_output.push(index);
+                continue;
+            }
+
+            let mycolor = mycluster.color();
+            let mut infos: Vec<_> = mycluster
+                .neighbours(&view)
+                .iter()
+                .map(|other| NeighbourInfo {
+                    index: *other,
+                    diff: (self.diff)(mycolor, self.get_cluster(*other).color()),
+                })
+                .collect();
+
+            if infos.is_empty() {
+                if self.iteration == self.cluster_areas.len() as ClusterIndexElem - 1 {
+                    // this is the final background
+                    self.clusters_output.push(index);
+                }
+                continue;
+            }
+
+            infos.sort_by_key(|info| info.diff as i64 * 65535 + info.index.0 as i64);
+
+            let target = infos[0].index;
+
+            let view = self.view();
+
+            let deepen = if self.hierarchical == HIERARCHICAL_MAX {
+                (self.deepen)(&view, &self.get_cluster(index), &infos)
+            } else {
+                false
+            };
+            let hollow = (self.hollow)(&view, &self.get_cluster(index), &infos);
+
+            if deepen {
+                self.clusters_output.push(index);
+            }
+
+            let target_in_areas = self
+                .cluster_areas
+                .binary_search_by_key(&self.clusters[target.0 as usize].area(), |a| a.area)
+                .unwrap();
+
+            self.cluster_areas[target_in_areas].count -= 1;
+            self.merge_cluster_into(index, target, deepen, hollow);
+            let updated_area = self.clusters[target.0 as usize].area();
+
+            match self
+                .cluster_areas
+                .binary_search_by_key(&updated_area, |a| a.area)
+            {
+                Ok(pos) => self.cluster_areas[pos].count += 1,
+                Err(pos) => self.cluster_areas.insert(
+                    pos,
+                    Area {
+                        area: updated_area,
+                        count: 1,
+                    },
+                ),
+            }
+        }
+
+        self.iteration += 1;
+        self.iteration as usize == self.cluster_areas.len()
+    }
+
     pub fn merge_cluster_into(&mut self, from: ClusterIndex, to: ClusterIndex, deepen: bool, hollow: bool) {
         if !deepen {
-            let mut residue = self.clusters[from.0 as usize].residue.clone();
             let residue_sum = self.clusters[from.0 as usize].residue_sum;
-            self.clusters[to.0 as usize].residue.append(&mut residue);
             self.clusters[to.0 as usize].residue_sum.merge(&residue_sum);
             self.combine_clusters(from, to);
         } else {
@@ -459,7 +488,7 @@ impl BuilderImpl {
                 self.clusters[to.0 as usize].num_holes += 1;
             }
 
-            self.clusters[from.0 as usize].merged_into = Some(to);
+            self.clusters[from.0 as usize].merged_into = to;
             self.clusters[to.0 as usize].depth += 1;
         }
     }

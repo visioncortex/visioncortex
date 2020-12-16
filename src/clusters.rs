@@ -56,7 +56,7 @@ impl Cluster {
         &self,
         mode: PathSimplifyMode,
         corner_threshold: f64,
-        length_threshold: f64,
+        segment_length: f64,
         max_iterations: usize,
         splice_threshold: f64
     ) -> CompoundPath {
@@ -64,29 +64,29 @@ impl Cluster {
             x: self.rect.left,
             y: self.rect.top,
         };
-        Self::compound_path_static(
+        Self::image_to_compound_path(
             &origin,
             &self.to_binary_image(),
             mode,
             corner_threshold,
-            length_threshold,
+            segment_length,
             max_iterations,
             splice_threshold
         )
     }
 
-    pub fn compound_path_static(
+    pub fn image_to_compound_path(
         offset: &PointI32,
         image: &BinaryImage,
         mode: PathSimplifyMode,
         corner_threshold: f64,
-        length_threshold: f64,
+        segment_length: f64,
         max_iterations: usize,
         splice_threshold: f64
     ) -> CompoundPath {
         match mode {
             PathSimplifyMode::None | PathSimplifyMode::Polygon => {
-                let paths = Self::paths_static(image, mode);
+                let paths = Self::image_to_paths(image, mode);
                 let mut group = CompoundPath::new();
                 for mut path in paths.into_iter() {
                     path.offset(&offset);
@@ -95,7 +95,7 @@ impl Cluster {
                 group
             },
             PathSimplifyMode::Spline => {
-                let splines = Self::splines_static(image, corner_threshold, length_threshold, max_iterations, splice_threshold);
+                let splines = Self::image_to_splines(image, corner_threshold, segment_length, max_iterations, splice_threshold);
                 let mut group = CompoundPath::new();
                 for mut spline in splines.into_iter() {
                     spline.offset(&offset.to_point_f64());
@@ -106,7 +106,7 @@ impl Cluster {
         }
     }
 
-    pub fn paths_static(image: &BinaryImage, mode: PathSimplifyMode) -> Vec<PathI32> {
+    pub fn image_to_paths(image: &BinaryImage, mode: PathSimplifyMode) -> Vec<PathI32> {
         let mut boundaries = vec![(image.clone(), PointI32 { x: 0, y: 0 })];
         let holes = image.negative().to_clusters(false);
         for hole in holes.iter() {
@@ -138,7 +138,9 @@ impl Cluster {
         paths
     }
 
-    pub fn splines_static(image: &BinaryImage, corner_threshold: f64, length_threshold: f64, max_iterations:usize, splice_threshold: f64) -> Vec<Spline> {
+    const OUTSET_RATIO: f64 = 8.0;
+
+    pub fn image_to_splines(image: &BinaryImage, corner_threshold: f64, segment_length: f64, max_iterations:usize, splice_threshold: f64) -> Vec<Spline> {
         let mut boundaries = vec![(image.clone(), PointI32 { x: 0, y: 0 })];
         let holes = image.negative().to_clusters(false);
         for hole in holes.iter() {
@@ -161,7 +163,9 @@ impl Cluster {
         }
         let mut splines = vec![];
         for (i, (image, offset)) in boundaries.iter_mut().enumerate() {
-            let mut spline = Spline::from_image(image, i == 0, corner_threshold, length_threshold, max_iterations, splice_threshold);
+            let mut spline = Spline::from_image(
+                image, i == 0, corner_threshold, Self::OUTSET_RATIO, segment_length, max_iterations, splice_threshold
+            );
             spline.offset(&offset.to_point_f64());
             if !spline.is_empty() {
                 splines.push(spline);

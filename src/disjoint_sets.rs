@@ -105,7 +105,7 @@ where
 
     let mut group_index = HashMap::new();
     let mut groups = Vec::new();
-    
+
     while let Some(item) = items.pop() {
         let index = items.len();
         let label = forests.find_set(&index).unwrap(); // safe because we already made sets 0..n

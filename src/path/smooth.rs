@@ -1,20 +1,21 @@
-use crate::{PathF64, PathI32, PointF64, PointI32};
+use crate::{Path, PathF64, PointF64, Point2};
 use flo_curves::{Coord2, bezier, BezierCurveFactory};
 
 /// Handles Path Smoothing
 pub(crate) struct SubdivideSmooth;
 
-use super::util::{angle, find_intersection, find_mid_point, norm_f64, normalize, normalize_f64, signed_angle_difference};
+use super::util::{angle, find_intersection, find_mid_point, norm, normalize, signed_angle_difference};
 
 impl SubdivideSmooth {
 
-    /// Takes a path forming a polygon, returns a vector of bool representing its corners
-    ///  (angle in radians bigger than threshold).
+    /// Takes a path forming a polygon, returns a vector of bool representing its corners 
+    /// (angle in radians bigger than threshold).
     /// 
     /// Note that the length of output is 1 less than that of the original path,
     /// because the last point of the original path is always equal to the first point for paths of walked polygons (closed path)
-    pub fn find_corners(path: &PathI32, threshold: f64) -> Vec<bool> {
-        
+    pub fn find_corners<T>(path: &Path<Point2<T>>, threshold: f64) -> Vec<bool>
+    where T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + std::ops::Mul<Output = T> + Copy + Into<f64> {
+
         let path = &path.path[0..(path.path.len()-1)];
         let len = path.len();
         if len == 0 {
@@ -26,8 +27,8 @@ impl SubdivideSmooth {
             let prev = if i==0 {len-1} else {i-1};
             let next = (i+1) % len;
 
-            let v1: PointI32 = path[i]-path[prev];
-            let v2: PointI32 = path[next]-path[i];
+            let v1: Point2<T> = path[i]-path[prev];
+            let v2: Point2<T> = path[next]-path[i];
 
             let angle_v1: f64 = angle(&normalize(&v1));
             let angle_v2: f64 = angle(&normalize(&v2));
@@ -38,7 +39,7 @@ impl SubdivideSmooth {
                 corners[i] = true;
             }
         }
-        
+
         corners
     }
 
@@ -65,8 +66,8 @@ impl SubdivideSmooth {
             let v1: PointF64 = path[i]-path[prev];
             let v2: PointF64 = path[next]-path[i];
 
-            let angle_v1: f64 = angle(&normalize_f64(&v1));
-            let angle_v2: f64 = angle(&normalize_f64(&v2));
+            let angle_v1: f64 = angle(&normalize(&v1));
+            let angle_v2: f64 = angle(&normalize(&v2));
 
             let angle_diff = signed_angle_difference(&angle_v1, &angle_v2);
             let is_currently_increasing = angle_diff.is_sign_positive();
@@ -126,10 +127,15 @@ impl SubdivideSmooth {
 
     /// Takes a path forming a polygon and a slice of bool representing corner positions.
     /// 
-    /// Use the 4-point (or 3-point) scheme to subdivide, but keeping all corners.
+    /// Use the 4-point scheme to subdivide while keeping corners. 
+    /// `outset_ratio` determines the relative amount to expand outward. 
+    /// This function will not attempt to divide segments <= `segment_length`.
     /// 
-    /// Returns a smoothed path, a Vec<bool> representing updated corner positions, and a bool indicating if iteration can terminate early.
-    pub fn subdivide_keep_corners(path: &PathF64, corners: &[bool], length_threshold: f64) -> (PathF64, Vec<bool>, bool) {
+    /// Returns a smoothed path, a Vec<bool> representing updated corner positions,
+    /// and `true` when no further subdivision is needed.
+    pub fn subdivide_keep_corners(
+        path: &PathF64, corners: &[bool], outset_ratio: f64, segment_length: f64
+    ) -> (PathF64, Vec<bool>, bool) {
 
         let path = &path.path[0..(path.path.len()-1)];
         let len = path.len();
@@ -151,8 +157,8 @@ impl SubdivideSmooth {
             let j = (i+1)%len;
 
             // Apply threshold on length of current segment
-            let length_curr = norm_f64(&(path[i] - path[j]));
-            if length_curr <= length_threshold {
+            let length_curr = norm(&(path[i] - path[j]));
+            if length_curr <= segment_length {
                 continue;
             }
 
@@ -160,8 +166,8 @@ impl SubdivideSmooth {
             let mut next = (j+1)%len;
 
             // Check ratio of adjacent segments
-            let length_prev = norm_f64(&(path[prev] - path[i]));
-            let length_next = norm_f64(&(path[next] - path[j]));
+            let length_prev = norm(&(path[prev] - path[i]));
+            let length_next = norm(&(path[next] - path[j]));
             if length_prev/length_curr >= 2.0 || length_next/length_curr >= 2.0 {
                 continue;
             }
@@ -178,11 +184,13 @@ impl SubdivideSmooth {
             if prev==i && next==j {
                 continue;
             } else {
-                let new_point = Self::find_new_point_from_4_point_scheme(&path[i], &path[j], &path[prev], &path[next]);
+                let new_point = Self::find_new_point_from_4_point_scheme(
+                    &path[i], &path[j], &path[prev], &path[next], outset_ratio
+                );
                 new_path.push(new_point);
                 new_corners.push(false); // new point will never be corner
                 // If any of the new segments is still bigger than the length threshold, further iterations will be needed
-                if norm_f64(&(path[i] - new_point)) > length_threshold || norm_f64(&(path[j] - new_point)) > length_threshold {
+                if norm(&(path[i] - new_point)) > segment_length || norm(&(path[j] - new_point)) > segment_length {
                     can_terminate_iteration = false;
                 }
             }
@@ -196,19 +204,20 @@ impl SubdivideSmooth {
 
     /// Finds mid-points between (p_i and p_j) and (p_1 and p_2),
     /// then returns the new point constructed by the 4-point scheme
-    fn find_new_point_from_4_point_scheme(p_i: &PointF64, p_j: &PointF64, p_1: &PointF64, p_2: &PointF64) -> PointF64 {
+    fn find_new_point_from_4_point_scheme(
+        p_i: &PointF64, p_j: &PointF64, p_1: &PointF64, p_2: &PointF64, outset_ratio: f64
+    ) -> PointF64 {
 
         let mid_out = find_mid_point(p_i, p_j);
         let mid_in = find_mid_point(p_1, p_2);
 
         let vector_out: PointF64 = mid_out - mid_in;
-        // Using the ratio 1:8
-        let new_magnitude = norm_f64(&vector_out) / 8.0;
+        let new_magnitude = norm(&vector_out) / outset_ratio;
         if new_magnitude < 1e-5 {
             // mid_out == mid_in in this case
             return mid_out;
         }
-        let unit_vector = normalize_f64(&vector_out);
+        let unit_vector = normalize(&vector_out);
         let frac_vector = PointF64 {x: unit_vector.x * new_magnitude, y: unit_vector.y * new_magnitude};
 
         // Point out from mid_out
@@ -219,11 +228,11 @@ impl SubdivideSmooth {
         let da: PointF64 = *a-*d;
         let ab: PointF64 = *b-*a;
         // signed angle DAB
-        let dab = signed_angle_difference(&angle(&normalize_f64(&da)), &angle(&normalize_f64(&ab)));
+        let dab = signed_angle_difference(&angle(&normalize(&da)), &angle(&normalize(&ab)));
 
         let bc: PointF64 = *c-*b;
         // signed angle ABC
-        let abc = signed_angle_difference(&angle(&normalize_f64(&ab)), &angle(&normalize_f64(&bc)));
+        let abc = signed_angle_difference(&angle(&normalize(&ab)), &angle(&normalize(&bc)));
 
         // They intersect
         if dab.is_sign_positive() != abc.is_sign_positive() {

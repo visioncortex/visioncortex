@@ -29,7 +29,7 @@ impl PathSimplify {
 
     /// Returns a copy of a path after removing 1-pixel staircases.
     /// 
-    /// Also takes a bool representing clockwiseness of path traversal because VTracer always takes
+    /// Clockwiseness of path must be indicated to perform outset
     pub fn remove_staircase(path: &PathI32, clockwise: bool) -> PathI32 {
         let path = &path.path;
         let len = path.len();

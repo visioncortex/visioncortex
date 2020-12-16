@@ -63,12 +63,13 @@ impl Spline {
     /// 
     /// Corner/Splice thresholds are specified in radians.
     /// Length threshold is specified in pixels (length unit in path coordinate system).
-    pub fn from_image(image: &BinaryImage, clockwise: bool, corner_threshold: f64, length_threshold: f64, max_iterations: usize, splice_threshold: f64) -> Self {
-        
+    pub fn from_image(
+        image: &BinaryImage, clockwise: bool, corner_threshold: f64, outset_ratio: f64,
+        segment_length: f64, max_iterations: usize, splice_threshold: f64
+    ) -> Self {
         let path = PathI32::image_to_path(image, clockwise, PathSimplifyMode::Polygon);
-        let path = path.smooth(corner_threshold, length_threshold, max_iterations);
+        let path = path.smooth(corner_threshold, outset_ratio, segment_length, max_iterations);
         Self::from_path_f64(&path, splice_threshold)
-            
     }
 
     /// Returns a spline by curve-fitting a path.

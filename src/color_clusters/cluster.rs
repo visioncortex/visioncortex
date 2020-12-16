@@ -1,18 +1,19 @@
-use crate::{BinaryImage, BoundingRect, Color, ColorSum, CompoundPath, PointI32, PathSimplifyMode, Shape};
+use std::collections::HashSet;
+use crate::{BinaryImage, BoundingRect, Color, ColorImage, ColorSum, CompoundPath, PointI32, PathSimplifyMode, Shape};
 use crate::clusters::Cluster as BinaryCluster;
 use super::container::{ClusterIndex, ClustersView};
+use super::builder::ZERO;
 
 #[derive(Clone, Default)]
 pub struct Cluster {
     pub indices: Vec<u32>,
-    pub residue: Vec<u32>,
     pub holes: Vec<u32>,
     pub num_holes: u32,
     pub depth: u32,
     pub sum: ColorSum,
     pub residue_sum: ColorSum,
     pub rect: BoundingRect,
-    pub merged_into: Option<ClusterIndex>,
+    pub merged_into: ClusterIndex,
 }
 
 impl Cluster {
@@ -43,49 +44,7 @@ impl Cluster {
     }
 
     pub fn perimeter(&self, parent: &ClustersView) -> u32 {
-        let mut perimeter = 0;
-        let index = parent.get_cluster_at(self.indices[0]);
-        for &i in self.residue.iter() {
-            let x = i % parent.width;
-            let y = i / parent.width;
-            for k in 0..4 {
-                let c = match k {
-                    0 => {
-                        if y > 0 {
-                            parent.cluster_indices[(parent.width * (y - 1) + x) as usize]
-                        } else {
-                            ClusterIndex(0)
-                        }
-                    }
-                    1 => {
-                        if y < parent.height - 1 {
-                            parent.cluster_indices[(parent.width * (y + 1) + x) as usize]
-                        } else {
-                            ClusterIndex(0)
-                        }
-                    }
-                    2 => {
-                        if x > 0 {
-                            parent.cluster_indices[(parent.width * y + (x - 1)) as usize]
-                        } else {
-                            ClusterIndex(0)
-                        }
-                    }
-                    3 => {
-                        if x < parent.width - 1 {
-                            parent.cluster_indices[(parent.width * y + (x + 1)) as usize]
-                        } else {
-                            ClusterIndex(0)
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-                if c.0 != 0 && c != index {
-                    perimeter += 1; 
-                }
-            }
-        }
-        perimeter
+        Shape::image_boundary_list(&self.to_image(parent)).len() as u32
     }
 
     pub fn to_image(&self, parent: &ClustersView) -> BinaryImage {
@@ -114,6 +73,27 @@ impl Cluster {
         image
     }
 
+    pub fn render_to_binary_image(&self, parent: &ClustersView, image: &mut BinaryImage) {
+        for &i in self.iter() {
+            let x = i % parent.width;
+            let y = i / parent.width;
+            image.set_pixel(x as usize, y as usize, true);
+        }
+    }
+
+    pub fn render_to_color_image(&self, parent: &ClustersView, image: &mut ColorImage) {
+        let color = self.residue_color();
+        self.render_to_color_image_with_color(parent, image, &color);
+    }
+
+    pub fn render_to_color_image_with_color(&self, parent: &ClustersView, image: &mut ColorImage, color: &Color) {
+        for &i in self.iter() {
+            let x = i % parent.width;
+            let y = i / parent.width;
+            image.set_pixel(x as usize, y as usize, &color);
+        }
+    }
+
     pub fn to_shape(&self, parent: &ClustersView) -> Shape {
         self.to_image(parent).into()
     }
@@ -131,7 +111,7 @@ impl Cluster {
         let mut paths = CompoundPath::new();
         for cluster in self.to_image_with_hole(parent, hole).to_clusters(false).iter() {
             paths.append(
-                BinaryCluster::compound_path_static(&PointI32 {
+                BinaryCluster::image_to_compound_path(&PointI32 {
                     x: self.rect.left + cluster.rect.left,
                     y: self.rect.top + cluster.rect.top,
                 }, &cluster.to_binary_image(), mode,
@@ -139,5 +119,32 @@ impl Cluster {
             );
         }
         paths
+    }
+
+    pub fn neighbours(&self, parent: &ClustersView) -> Vec<ClusterIndex> {
+        let myself = parent.get_cluster_at(*self.indices.first().unwrap());
+        let mut neighbours = HashSet::new();
+
+        for &i in self.iter() {
+            let x = i % parent.width;
+            let y = i / parent.width;
+
+            for k in 0..4 {
+                let index = match k {
+                    0 => if y > 0 { parent.cluster_indices[(parent.width * (y - 1) + x) as usize] } else { ZERO },
+                    1 => if y < parent.height - 1 { parent.cluster_indices[(parent.width * (y + 1) + x) as usize] } else { ZERO },
+                    2 => if x > 0 { parent.cluster_indices[(parent.width * y + (x - 1)) as usize] } else { ZERO },
+                    3 => if x < parent.width - 1 { parent.cluster_indices[(parent.width * y + (x + 1)) as usize] } else { ZERO },
+                    _ => unreachable!(),
+                };
+                if index != ZERO && index != myself {
+                    neighbours.insert(index);
+                }
+            }
+        }
+
+        let mut list: Vec<ClusterIndex> = neighbours.into_iter().collect();
+        list.sort();
+        list
     }
 }

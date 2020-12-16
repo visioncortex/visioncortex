@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-use crate::{PointF64, PointI32};
+use crate::{Point2, PointF64, PointI32};
 
 /// assume origin is top left corner, signed_area > 0 imply clockwise
 pub(crate) fn signed_area(p1: PointI32, p2: PointI32, p3: PointI32) -> i32 {
@@ -40,22 +40,17 @@ pub(crate) fn find_mid_point(p1: &PointF64, p2: &PointF64) -> PointF64 {
     PointF64 {x, y}
 }
 
-pub(crate) fn norm(p: &PointI32) -> f64 {
-    ((p.x*p.x + p.y*p.y) as f64).sqrt()
+pub(crate) fn norm<T>(p: &Point2<T>) -> f64
+where T: std::ops::Add<Output = T> + std::ops::Mul<Output = T> + Copy + Into<f64> {
+    let n: f64 = (p.x*p.x + p.y*p.y).into();
+    n.sqrt()
 }
 
-pub(crate) fn norm_f64(p: &PointF64) -> f64 {
-    (p.x*p.x + p.y*p.y).sqrt()
-}
-
-pub(crate) fn normalize(p: &PointI32) -> PointF64 {
+pub(crate) fn normalize<T>(p: &Point2<T>) -> PointF64
+where T: std::ops::Add<Output = T> + std::ops::Mul<Output = T> + Copy + Into<f64> {
     let norm = norm(p);
-    PointF64::new(p.x as f64 / norm, p.y as f64 / norm)
-}
-
-pub(crate) fn normalize_f64(p: &PointF64) -> PointF64 {
-    let norm = norm_f64(p);
-    PointF64::new(p.x / norm, p.y / norm)
+    let (px, py): (f64, f64) = (p.x.into(), p.y.into());
+    PointF64::new(px / norm, py / norm)
 }
 
 pub(crate) fn angle(p: &PointF64) -> f64 {

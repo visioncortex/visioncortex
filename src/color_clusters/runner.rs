@@ -7,6 +7,8 @@ pub struct Runner {
 }
 
 pub struct RunnerConfig {
+    pub diagonal: bool,
+    pub hierarchical: u32,
     pub batch_size: i32,
     pub good_min_area: usize,
     pub good_max_area: usize,
@@ -19,6 +21,8 @@ pub struct RunnerConfig {
 impl Default for RunnerConfig {
     fn default() -> Self {
         Self {
+            diagonal: false,
+            hierarchical: HIERARCHICAL_MAX,
             batch_size: 25600,
             good_min_area: 16,
             good_max_area: 256 * 256,
@@ -54,6 +58,8 @@ impl Runner {
 
     pub fn builder(self) -> Builder {
         let RunnerConfig {
+            diagonal,
+            hierarchical,
             batch_size,
             good_min_area,
             good_max_area,
@@ -63,9 +69,12 @@ impl Runner {
             hollow_neighbours,
         } = self.config;
 
+        assert!(is_same_color_a < 8);
+
         Builder::new()
             .from(self.image)
-            .diagonal(false)
+            .diagonal(diagonal)
+            .hierarchical(hierarchical)
             .batch_size(batch_size as u32)
             .same(move |a: Color, b: Color| {
                 color_same(a, b, is_same_color_a, is_same_color_b)
@@ -118,7 +127,8 @@ fn patch_good(
     good_max_area: usize
 ) -> bool {
     if good_min_area < patch.area() && patch.area() < good_max_area {
-        if (patch.perimeter(parent) as usize) < patch.area() {
+        if good_min_area == 0 ||
+            (patch.perimeter(parent) as usize) < patch.area() {
             return true;
         } else {
             // cluster is thread-like and thinner than 2px

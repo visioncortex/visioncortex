@@ -1,8 +1,8 @@
 use std::fmt::Write;
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub, Mul};
 
-use crate::{BinaryImage, PointF64, PointI32, Shape, ToSvgString};
-use super::{PathSimplify, PathSimplifyMode, PathWalker, smooth::SubdivideSmooth};
+use crate::{BinaryImage, Point2, PointF64, PointI32, Shape, ToSvgString};
+use super::{PathSimplify, PathSimplifyMode, PathWalker, smooth::SubdivideSmooth, reduce::reduce};
 
 #[derive(Default)]
 /// Path of generic points in 2D space
@@ -67,6 +67,8 @@ where
     /// Takes a bool to indicate whether the end should be wrapped back to start.
     /// 
     /// An offset is specified to apply an offset to the display points (useful when displaying on canvas elements).
+    /// 
+    /// If `close` is true, assume the last point of the path repeats the first point
     pub fn to_svg_string(&self, close: bool, offset: &T) -> String {
         let o = *offset;
         let mut string = String::new();
@@ -90,6 +92,105 @@ where
     }
 }
 
+impl<T> Path<Point2<T>>
+where T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> +
+    std::cmp::PartialEq + std::cmp::PartialOrd + Copy + Into<f64> {
+
+    /// Path is a closed path (shape), but the reduce algorithm only reduces open paths.
+    /// We divide the path into four sections, spliced at the extreme points (max-x max-y min-x min-y),
+    /// and reduce each section individually.
+    /// Thus the most simplified path consists of at least 4 points.
+    /// This function assumes the last point of the path repeats the first point.
+    pub fn reduce(&self, tolerance: f64) -> Option<Self> {
+        if !self.path.is_empty() {
+            assert!(self.path[0] == self.path[self.path.len() - 1]);
+        }
+        let mut corners = [(0, self.path[0]); 4];
+        for (i, p) in self.path.iter().enumerate() {
+            if i == self.path.len() - 1 {
+                break;
+            }
+            if p.x < corners[0].1.x { corners[0] = (i, *p); }
+            if p.y <= corners[1].1.y { corners[1] = (i, *p); }
+            if p.x >= corners[2].1.x { corners[2] = (i, *p); }
+            if p.y >= corners[3].1.y { corners[3] = (i, *p); }
+        }
+        let abs = |i: T| -> f64 { let i: f64 = i.into(); if i < 0.0 { -i } else { i } };
+        if  abs(corners[0].1.x - corners[2].1.x) < tolerance &&
+            abs(corners[1].1.y - corners[3].1.y) < tolerance {
+            return None;
+        }
+        corners.sort_by_key(|c| c.0);
+        let mut sections = [
+            &self.path[corners[0].0..=corners[1].0],
+            &self.path[corners[1].0..=corners[2].0],
+            &self.path[corners[2].0..=corners[3].0],
+            &[],
+        ];
+        let mut last = self.path[corners[3].0..self.path.len()-1].to_vec();
+        last.append(&mut self.path[0..=corners[0].0].to_vec());
+        sections[3] = &last.as_slice();
+        let mut combined = Vec::new();
+        for (i, path) in sections.iter().enumerate() {
+            let mut reduced = reduce::<T>(path, tolerance);
+            if i != 3 {
+                reduced.pop();
+            }
+            combined.append(&mut reduced);
+        }
+        if combined.len() <= 3 {
+            return None
+        }
+        Some(Self {
+            path: combined
+        })
+    }
+
+}
+
+impl PathI32 {
+    /// Returns a copy of self after Path Smoothing, preserving corners.
+    /// 
+    /// `corner_threshold` is specified in radians.
+    /// `outset_ratio` is a real number >= 1.0.
+    /// `segment_length` is specified in pixels (length unit in path coordinate system).
+    pub fn smooth(
+        &self, corner_threshold: f64, outset_ratio: f64, segment_length: f64, max_iterations: usize
+    ) -> PathF64 {
+        assert!(max_iterations > 0);
+        let mut corners = SubdivideSmooth::find_corners(self, corner_threshold);
+        let mut path = self.to_path_f64();
+        for _i in 0..max_iterations {
+            let result = SubdivideSmooth::subdivide_keep_corners(&path, &corners, outset_ratio, segment_length);
+            path = result.0;
+            corners = result.1;
+            if result.2 { // Can terminate early
+                break;
+            }
+        }
+        path
+    }
+}
+
+impl PathF64 {
+    pub fn smooth(
+        &self, corner_threshold: f64, outset_ratio: f64, segment_length: f64, max_iterations: usize
+    ) -> PathF64 {
+        assert!(max_iterations > 0);
+        let mut corners = SubdivideSmooth::find_corners(self, corner_threshold);
+        let mut path = PathF64::new();
+        for _i in 0..max_iterations {
+            let result = SubdivideSmooth::subdivide_keep_corners(self, &corners, outset_ratio, segment_length);
+            path = result.0;
+            corners = result.1;
+            if result.2 { // Can terminate early
+                break;
+            }
+        }
+        path
+    }
+}
+
 impl PathI32 {
 
     /// Returns a copy of self after Path Simplification:
@@ -98,25 +199,6 @@ impl PathI32 {
     pub fn simplify(&self, clockwise: bool) -> Self {
         let path = PathSimplify::remove_staircase(self, clockwise);
         PathSimplify::limit_penalties(&path)
-    }
-
-    /// Returns a copy of self after Path Smoothing, preserving corners.
-    /// 
-    /// Corner threshold is specified in radians.
-    /// Length threshold is specified in pixels (length unit in path coordinate system).
-    pub fn smooth(&self, corner_threshold: f64, length_threshold: f64, max_iterations: usize) -> PathF64 {
-        // First locate all corners
-        let mut corners = SubdivideSmooth::find_corners(self, corner_threshold);
-        let mut path = self.to_path_f64();
-        for _i in 0..max_iterations {
-            let result = SubdivideSmooth::subdivide_keep_corners(&path, &corners, length_threshold);
-            path = result.0;
-            corners = result.1;
-            if result.2 { // Can terminate early
-                break;
-            }
-        }
-        path
     }
 
     /// Converts outline of pixel cluster to path with Path Walker. 
@@ -186,5 +268,165 @@ mod tests {
         path.add(PointI32 { x: 1, y: 1 });
         path.add(PointI32 { x: 0, y: 0 });
         assert_eq!("M0,0 L1,0 L1,1 Z ", path.to_svg_string(true, &PointI32::default()));
+    }
+
+    #[test]
+    fn test_reduce_noop() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 0 },
+                PointI32 { x: 1, y: 1 },
+                PointI32 { x: 0, y: 1 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(0.5).unwrap().path, path.path);
+    }
+
+    #[test]
+    fn test_reduce_empty() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 0 },
+                PointI32 { x: 1, y: 1 },
+                PointI32 { x: 0, y: 1 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert!(path.reduce(2.0).is_none());
+    }
+
+    #[test]
+    fn test_reduce_noop_2() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 0 },
+                PointI32 { x: 10, y: 0 },
+                PointI32 { x: 10, y: 9 },
+                PointI32 { x: 10, y: 10 },
+                PointI32 { x: 0, y: 10 },
+                PointI32 { x: 0, y: 9 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(0.5).unwrap().path, vec![
+            PointI32 { x: 0, y: 0 },
+            PointI32 { x: 10, y: 0 },
+            PointI32 { x: 10, y: 10 },
+            PointI32 { x: 0, y: 10 },
+            PointI32 { x: 0, y: 0 },
+        ]);
+    }
+
+    #[test]
+    fn test_reduce() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 0 },
+                PointI32 { x: 10, y: 0 },
+                PointI32 { x: 10, y: 9 },
+                PointI32 { x: 10, y: 10 },
+                PointI32 { x: 0, y: 10 },
+                PointI32 { x: 0, y: 9 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(1.0).unwrap().path, vec![
+            PointI32 { x: 0, y: 0 },
+            PointI32 { x: 10, y: 0 },
+            PointI32 { x: 10, y: 10 },
+            PointI32 { x: 0, y: 10 },
+            PointI32 { x: 0, y: 0 },
+        ]);
+    }
+
+    #[test]
+    fn test_reduce_shuffle() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 0 },
+                PointI32 { x: 10, y: 0 },
+                PointI32 { x: 10, y: 10 },
+                PointI32 { x: 9, y: 9 },
+                PointI32 { x: 0, y: 9 },
+                PointI32 { x: 0, y: 10 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(1.0).unwrap().path, vec![
+            PointI32 { x: 0, y: 0 },
+            PointI32 { x: 10, y: 0 },
+            PointI32 { x: 10, y: 10 },
+            PointI32 { x: 0, y: 10 },
+            PointI32 { x: 0, y: 0 },
+        ]);
+    }
+
+    #[test]
+    fn test_reduce_diamond_noop() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 1 },
+                PointI32 { x: 0, y: 2 },
+                PointI32 { x: -1, y: 1 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(0.5).unwrap().path, path.path);
+    }
+
+    #[test]
+    fn test_reduce_diamond() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 10, y: 10 },
+                PointI32 { x: 9, y: 9 },
+                PointI32 { x: 0, y: 20 },
+                PointI32 { x: 0, y: 19 },
+                PointI32 { x: -10, y: 10 },
+                PointI32 { x: -10, y: 9 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(2.0).unwrap().path, vec![
+            PointI32 { x: 0, y: 0 },
+            PointI32 { x: 10, y: 10 },
+            PointI32 { x: 0, y: 20 },
+            PointI32 { x: -10, y: 10 },
+            PointI32 { x: 0, y: 0 },
+        ]);
+    }
+
+    #[test]
+    fn test_reduce_triangle_noop() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 1, y: 1 },
+                PointI32 { x: 0, y: 1 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert_eq!(path.reduce(0.5).unwrap().path, path.path);
+    }
+
+    #[test]
+    fn test_reduce_triangle_degenerate() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 10, y: 10 },
+                PointI32 { x: 0, y: 1 },
+                PointI32 { x: 0, y: 0 },
+            ]
+        };
+        assert!(path.reduce(2.0).is_none());
     }
 }

@@ -22,6 +22,14 @@ pub struct ColorI32 {
     pub b: i32,
 }
 
+/// RGB; each channel is 64 bit float
+#[derive(Copy, Clone, Default, PartialEq, Debug)]
+pub struct ColorF64 {
+    pub r: f64,
+    pub g: f64,
+    pub b: f64,
+}
+
 /// RGBA; each channel is 32 bit unsigned
 #[derive(Copy, Clone, Default, PartialEq, Eq)]
 pub struct ColorSum {
@@ -176,6 +184,20 @@ impl ColorI32 {
         assert!(0 <= self.g && self.g < 256);
         assert!(0 <= self.b && self.b < 256);
         Color::new(self.r as u8, self.g as u8, self.b as u8)
+    }
+}
+
+impl ColorF64 {
+    pub fn new(color: &ColorI32) -> Self {
+        Self {
+            r: color.r as f64,
+            g: color.g as f64,
+            b: color.b as f64,
+        }
+    }
+
+    pub fn magnitude(&self) -> f64 {
+        (self.r * self.r + self.g * self.g + self.b * self.b).sqrt()
     }
 }
 

@@ -24,6 +24,10 @@ impl CompoundPath {
         }
     }
 
+    pub fn iter(&self) -> std::slice::Iter<CompoundPathElement> {
+        self.paths.iter()
+    }
+
     pub fn append(&mut self, mut other: Self) {
         self.paths.append(&mut other.paths);
     }
@@ -40,6 +44,7 @@ impl CompoundPath {
         self.paths.push(CompoundPathElement::Spline(path));
     }
 
+    /// returns a single svg path string in relative path syntax and offset
     pub fn to_svg_string(&self, close: bool, offset: PointF64) -> (String, PointF64) {
         let origin = if !self.paths.is_empty() {
             match &self.paths[0] {
@@ -60,6 +65,50 @@ impl CompoundPath {
         }).collect::<String>();
 
         (string, offset - origin)
+    }
+
+    pub fn reduce(&self, tolerance: f64) -> Self {
+        CompoundPath {
+            paths: self.paths.iter().filter_map(|path| {
+                match path {
+                    CompoundPathElement::PathI32(path) => {
+                        if let Some(path) = path.reduce(tolerance)
+                        { Some(CompoundPathElement::PathI32(path)) } else { None }
+                    },
+                    CompoundPathElement::PathF64(path) => {
+                        if let Some(path) = path.reduce(tolerance)
+                        { Some(CompoundPathElement::PathF64(path)) } else { None }
+                    },
+                    CompoundPathElement::Spline(_) => panic!("unimplemented!()"),
+                }
+            }).collect()
+        }
+    }
+
+    pub fn remove_holes(&mut self) {
+        self.paths.truncate(1);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.paths.is_empty()
+    }
+
+    const DEFAULT_MAX_ITERATIONS: usize = 10;
+
+    pub fn smooth(&self, corner_threshold: f64, outset_ratio: f64, segment_length: f64) -> Self {
+        CompoundPath {
+            paths: self.paths.iter().map(|path| {
+                match path {
+                    CompoundPathElement::PathI32(path) => CompoundPathElement::PathF64(path.smooth(
+                        corner_threshold, outset_ratio, segment_length, Self::DEFAULT_MAX_ITERATIONS
+                    )),
+                    CompoundPathElement::PathF64(path) => CompoundPathElement::PathF64(path.smooth(
+                        corner_threshold, outset_ratio, segment_length, Self::DEFAULT_MAX_ITERATIONS
+                    )),
+                    CompoundPathElement::Spline(_) => panic!("unimplemented!()"),
+                }
+            }).collect()
+        }
     }
 }
 
