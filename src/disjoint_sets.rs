@@ -313,7 +313,7 @@ mod tests {
         // {1, 1, 1}, {3, 4}, {7, 7, 8, 9}, {24}
         for mut group in groups {
             println!("{:?}", group);
-            group.sort();
+            group.sort_unstable();
             if group.len() == 4 {
                 assert_eq!(group, [7, 7, 8, 9]);
             } else if group.len() == 3 {
@@ -336,7 +336,7 @@ mod tests {
         // {1, 1, 1}, {3, 4}, {7, 7, 8, 9}, {24}
         for mut group in groups {
             println!("{:?}", group);
-            group.sort();
+            group.sort_unstable();
             if group.len() == 4 {
                 assert_eq!(group, [7, 7, 8, 9]);
             } else if group.len() == 3 {

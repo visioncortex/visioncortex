@@ -87,7 +87,7 @@ impl SampleStatBuilder {
             deviation,
         } = self.simple.build();
 
-        self.sequence.sort();
+        self.sequence.sort_unstable();
         let max = self.histogram.iter().max_by_key(|x| x.1).unwrap_or((&0, &0)).1;
         let mut maxes: Vec<(&i32, &i32)> = self.histogram.iter().filter(|x| x.1 == max).collect();
         maxes.sort_by_key(|x| x.0);
