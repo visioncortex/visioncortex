@@ -1,9 +1,11 @@
 use crate::{PathI32, PathF64, PointF64, Spline};
 
+#[derive(Debug)]
 pub struct CompoundPath {
     pub paths: Vec<CompoundPathElement>,
 }
 
+#[derive(Debug)]
 pub enum CompoundPathElement {
     PathI32(PathI32),
     PathF64(PathF64),

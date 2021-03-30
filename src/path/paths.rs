@@ -4,7 +4,7 @@ use std::ops::{Add, AddAssign, Sub, Mul};
 use crate::{BinaryImage, Point2, PointF64, PointI32, Shape, ToSvgString};
 use super::{PathSimplify, PathSimplifyMode, PathWalker, smooth::SubdivideSmooth, reduce::reduce};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 /// Path of generic points in 2D space
 pub struct Path<T> {
     /// T can be PointI32/PointF64, etc. (see src/point.rs).

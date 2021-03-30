@@ -3,8 +3,7 @@ use crate::{BinaryImage, BoundingRect, CompoundPath, MonoImage, MonoImageItem, P
 /// A cluster of binary image pixels
 #[derive(Default)]
 pub struct Cluster {
-    // in absolute coordinate, i.e.
-    // (0, 0) is the coordinate of the left-top corner of the raw frame.
+    /// Points are in absolute coordinate, i.e. (0, 0) is the coordinate of the left-top corner of the raw frame.
     pub points: Vec<PointI32>,
     pub rect: BoundingRect,
 }

@@ -51,10 +51,12 @@ where
             y: a.sin() * (self.x - o.x) + a.cos() * (self.y - o.y) + o.y,
         }
     }
+
     #[inline]
     pub fn translate(self, vector: Self) -> Self {
         self + vector
     }
+
     #[inline]
     pub fn norm(self) -> T {
         self.dot(self).sqrt()
@@ -142,6 +144,10 @@ impl PointI32 {
 impl PointF64 {
     pub fn to_point_i32(&self) -> PointI32 {
         PointI32 { x: self.x as i32, y: self.y as i32 }
+    }
+
+    pub fn to_point_f32(&self) -> PointF32 {
+        PointF32 { x: self.x as f32, y: self.y as f32 }
     }
 }
 

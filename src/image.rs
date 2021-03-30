@@ -3,7 +3,7 @@ use std::fmt::Write;
 
 pub use bit_vec::BitVec;
 
-use crate::{BoundingRect, Color, Field, PointF64, PointI32};
+use crate::{BoundingRect, Color, ColorName, ColorType, Field, PointF32, PointF64, PointI32};
 
 /// Image with 1 bit per pixel
 #[derive(Debug, Clone, Default)]
@@ -166,12 +166,15 @@ impl BinaryImage {
         image
     }
 
-    pub fn rotate(&mut self, angle: f64) -> BinaryImage {
+    pub fn rotate(&self, angle: f64) -> BinaryImage {
         let rotated_width = (self.width as f64 * angle.cos().abs() + self.height as f64 * angle.sin().abs()).round() as usize;
         let rotated_height = (self.width as f64 * angle.sin().abs() + self.height as f64 * angle.cos().abs()).round() as usize;
         let mut rotated_image = BinaryImage::new_w_h(rotated_width, rotated_height);
-        let origin = PointF64::new((rotated_width / 2) as f64, (rotated_height / 2) as f64);
-        let offset = PointF64::new((rotated_width - self.width) as f64 / 2.0, (rotated_height - self.height) as f64 / 2.0);
+        let origin = PointF64::new(rotated_width as f64 / 2.0, rotated_height as f64 / 2.0);
+        let offset = PointF64::new(
+            (rotated_width as i32 - self.width as i32) as f64 / 2.0,
+            (rotated_height as i32 - self.height as i32) as f64 / 2.0
+        );
         for y in 0..rotated_image.height {
             for x in 0..rotated_image.width {
                 let rotated = PointF64::new(x as f64, y as f64).rotate(origin, -angle).translate(-offset);
@@ -197,6 +200,22 @@ impl BinaryImage {
                 }
             }
         }
+    }
+
+    pub fn to_color_image(&self) -> ColorImage {
+        let mut image = ColorImage::new_w_h(self.width, self.height);
+        let black = Color::color(&ColorName::Black);
+        let white = Color::color(&ColorName::White);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                image.set_pixel(x, y, if self.get_pixel(x, y) {
+                    &black
+                } else {
+                    &white
+                });
+            }
+        }
+        image
     }
 }
 
@@ -270,6 +289,18 @@ impl ColorImage {
         self.get_pixel_at(index)
     }
 
+    pub fn get_pixel_at_point_safe(&self, p: PointI32) -> Option<Color> {
+        self.get_pixel_safe(p.x, p.y)
+    }
+
+    pub fn get_pixel_safe(&self, x: i32, y: i32) -> Option<Color> {
+        if  x >= 0 && x < self.width as i32 &&
+            y >= 0 && y < self.height as i32 {
+            return Some(self.get_pixel(x as usize, y as usize));
+        }
+        None
+    }
+
     pub fn get_pixel_at(&self, index: usize) -> Color {
         let index = index * 4;
         let r = self.pixels[index];
@@ -293,7 +324,8 @@ impl ColorImage {
         self.pixels[index + 3] = color.a;
     }
 
-    pub fn to_binary_image(&self, f: fn(Color) -> bool) -> BinaryImage {
+    pub fn to_binary_image<F>(&self, f: F) -> BinaryImage
+        where F: Fn(Color) -> bool {
         let mut image = BinaryImage::new_w_h(self.width, self.height);
         for y in 0..self.height {
             for x in 0..self.width {
@@ -302,6 +334,54 @@ impl ColorImage {
         }
         image
     }
+
+    pub fn sample_pixel_at(&self, p: PointF32) -> Color {
+        bilinear_interpolate(self, p)
+    }
+
+    pub fn sample_pixel_at_safe(&self, p:PointF32) -> Option<Color> {
+        bilinear_interpolate_safe(self, p)
+    }
+}
+
+pub fn bilinear_interpolate_safe(im: &ColorImage, p: PointF32) -> Option<Color> {
+    if p.x.is_sign_negative() || p.y.is_sign_negative() || p.x > (im.width - 1) as f32 || p.y > (im.height - 1) as f32 {
+        None
+    } else {
+        Some(bilinear_interpolate(im, p))
+    }
+}
+
+pub fn bilinear_interpolate(im: &ColorImage, p: PointF32) -> Color {
+    let x_0 = p.x.floor() as usize;
+    let x_1 = p.x.ceil() as usize;
+    let y_0 = p.y.floor() as usize;
+    let y_1 = p.y.ceil() as usize;
+    let c_00 = im.get_pixel(x_0, y_0);
+    let c_01 = im.get_pixel(x_0, y_1);
+    let c_10 = im.get_pixel(x_1, y_0);
+    let c_11 = im.get_pixel(x_1, y_1);
+
+    let interpolate = |channel: usize| {
+        let f_00 = c_00.channel(channel).unwrap() as f32;
+        let f_01 = c_01.channel(channel).unwrap() as f32;
+        let f_10 = c_10.channel(channel).unwrap() as f32;
+        let f_11 = c_11.channel(channel).unwrap() as f32;
+        let x = p.x - p.x.floor();
+        let y = p.y - p.y.floor();
+
+        (f_00 * (1.0 - x) * (1.0 - y) +
+        f_10 * x * (1.0 - y) +
+        f_01 * (1.0 - x) * y +
+        f_11 * x * y) as u8
+    };
+
+    Color::new_rgba(
+        interpolate(0),
+        interpolate(1), 
+        interpolate(2), 
+        interpolate(3),
+    )
 }
 
 #[cfg(test)]
@@ -338,5 +418,74 @@ mod tests {
                 assert_eq!(image.get_pixel(x, y), recover.get_pixel(x, y));
             }
         }
+    }
+
+    #[test]
+    fn rotate_test() {
+        assert_eq!(
+            BinaryImage::from_string(&(
+            "-----------*************---------\n".to_owned()+
+            "---------*****************-------\n"+
+            "-------*********************-----\n"+
+            "-----************************----\n"+
+            "----**************************---\n"+
+            "---****************************--\n"+
+            "--*****************************--\n"+
+            "--******************************-\n"+
+            "-*******************************-\n"+
+            "-********************************\n"+
+            "*********************************\n"+
+            "*********************************\n"+
+            "********************************-\n"+
+            "********************************-\n"+
+            "********************************-\n"+
+            "*******************************--\n"+
+            "-******************************--\n"+
+            "-*****************************---\n"+
+            "--***************************----\n"+
+            "---*************************-----\n"+
+            "----***********************------\n"+
+            "-----*********************-------\n"+
+            "-------*****************---------\n"+
+            "---------************------------\n"
+            )).rotate(1.3962634015954636).to_string(),
+            "-----------------------------\n".to_owned()+
+            "-----------------------------\n"+
+            "-----------****-*------------\n"+
+            "---------**********----------\n"+
+            "-------*************---------\n"+
+            "------***************--------\n"+
+            "-----*****************-------\n"+
+            "-----*******************-----\n"+
+            "-----*******************-----\n"+
+            "----*********************----\n"+
+            "----*********************----\n"+
+            "---***********************---\n"+
+            "---************************--\n"+
+            "--*************************--\n"+
+            "---************************--\n"+
+            "---************************--\n"+
+            "---************************--\n"+
+            "---************************--\n"+
+            "---*************************-\n"+
+            "---*************************-\n"+
+            "----************************-\n"+
+            "----************************-\n"+
+            "----************************-\n"+
+            "----************************-\n"+
+            "----************************-\n"+
+            "-----***********************-\n"+
+            "------*********************--\n"+
+            "------*********************--\n"+
+            "-------*******************---\n"+
+            "--------*****************----\n"+
+            "---------****************----\n"+
+            "-----------**************----\n"+
+            "------------***********------\n"+
+            "---------------******--------\n"+
+            "------------------*----------\n"+
+            "-----------------------------\n"+
+            "-----------------------------\n"
+        );
     }
 }

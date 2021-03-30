@@ -105,6 +105,13 @@ impl SampleStatBuilder {
         }
     }
 
+    pub fn percentile(&self, i: u32) -> i32 {
+        if self.sequence.is_empty() {
+            return 0;
+        }
+        self.sequence[self.sequence.len() * i as usize / 100]
+    }
+
     pub fn median(sorted_numbers: &[i32]) -> i32 {
         if sorted_numbers.is_empty() {
             return 0;

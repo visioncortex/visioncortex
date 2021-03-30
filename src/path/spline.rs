@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use crate::{BinaryImage, PathF64, PointF64, PathSimplifyMode};
 use super::{PathI32, smooth::SubdivideSmooth};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 /// Series of connecting 2D Bezier Curves
 pub struct Spline {
     /// 1+3*(num_curves) points, where the first curve is represented by the first 4 points and each subsequent curve is represented by the last point in the previous curve plus 3 points

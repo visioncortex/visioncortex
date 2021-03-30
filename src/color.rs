@@ -1,3 +1,9 @@
+pub trait ColorType {
+    type ValueType;
+
+    fn channel(&self, c: usize) -> Option<Self::ValueType>;
+}
+
 /// RGBA; each channel is 8 bit unsigned
 #[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 pub struct Color {
@@ -150,6 +156,20 @@ impl Color {
             } else {
                 b
             }
+        }
+    }
+}
+
+impl ColorType for Color {
+    type ValueType = u8;
+
+    fn channel(&self, c: usize) -> Option<Self::ValueType> {
+        match c {
+            0 => Some(self.r),
+            1 => Some(self.g),
+            2 => Some(self.b),
+            3 => Some(self.a),
+            _ => None,
         }
     }
 }

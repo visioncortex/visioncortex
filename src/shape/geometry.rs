@@ -1,4 +1,5 @@
-use crate::{BinaryImage, BoundingRect, PointI32};
+use crate::{BinaryImage, BoundingRect, clusters::Cluster, CompoundPathElement, PathSimplifyMode, PointI32};
+use super::rasterizer::rasterize_triangle;
 
 /// A conceptual object represented by an image
 #[derive(Clone)]
@@ -115,16 +116,25 @@ impl Shape {
     }
 
     pub fn is_circle(&self) -> bool {
-        if self.image.width <= 4 && self.image.height <= 4 {
-            return false;
-        }
         if std::cmp::max(self.image.width, self.image.height) - 
             std::cmp::min(self.image.width, self.image.height) >
             std::cmp::max(self.image.width, self.image.height) / 4 {
             return false;
         }
-        let threshold = self.image.width * self.image.height / 4;
+        self.is_ellipse()
+    }
+
+    pub fn is_ellipse(&self) -> bool {
+        if self.image.width <= 4 && self.image.height <= 4 {
+            return false;
+        }
+        let threshold = std::cmp::min(self.image.width, self.image.height);
+        let threshold = (threshold * threshold) / 4;
         let diff = self.image.diff(&Self::ellipse(self.image.width, self.image.height).image);
+        Self::clustered_diff(&diff, threshold)
+    }
+
+    fn clustered_diff(diff: &BinaryImage, threshold: usize) -> bool {
         let clusters = diff.to_clusters(false);
         let mut sum = 0;
         for cluster in clusters.iter() {
@@ -135,6 +145,34 @@ impl Shape {
         }
         #[cfg(test)] { println!("sum={}", sum) }
         true
+    }
+
+    pub fn is_quadrilateral(&self) -> bool {
+        let mut paths = Cluster::image_to_compound_path(
+            &PointI32::default(),
+            &self.image,
+            PathSimplifyMode::None,
+            0.0,
+            0.0,
+            0,
+            0.0
+        );
+        paths.paths.truncate(1);
+        let paths = paths.reduce(std::cmp::min(self.image.width, self.image.height) as f64);
+        // the path is reduced to a quadrilateral bound by the north most, east most, south most and west most point
+        let mut reduced = BinaryImage::new_w_h(self.image.width, self.image.height);
+        let path = &match &paths.paths[0] {
+            CompoundPathElement::PathI32(path) => path,
+            _ => unreachable!(),
+        }.path;
+        let p0 = PointI32::new(path[0].x-1, path[0].y);
+        let p2 = PointI32::new(path[2].x, path[2].y-1);
+        rasterize_triangle(&[p0, PointI32::new(path[1].x-1, path[1].y-1), p2], &mut reduced);
+        rasterize_triangle(&[p0, p2, PointI32::new(path[3].x, path[1].y-1)], &mut reduced);
+        // panic!("\n{}", reduced.to_string());
+        let diff = self.image.diff(&reduced);
+        let threshold = self.image.width * self.image.height / 6;
+        Self::clustered_diff(&diff, threshold)
     }
 }
 
@@ -259,5 +297,52 @@ mod tests {
             "*******\n" +
             "--***--\n"
         );
+    }
+
+    #[test]
+    fn is_quadrilateral_test_1() {
+        assert!(!Shape::from(BinaryImage::from_string(&(
+            "--***--\n".to_owned() +
+            "-*****-\n" +
+            "*******\n" +
+            "*******\n" +
+            "*******\n" +
+            "-*****-\n" +
+            "--***--\n"
+        ))).is_quadrilateral());
+    }
+
+    #[test]
+    fn is_quadrilateral_test_2() {
+        assert!(Shape::from(BinaryImage::from_string(&(
+            "----*----\n".to_owned() +
+            "---***---\n" +
+            "--*****--\n" +
+            "-*******-\n" +
+            "*********\n" +
+            "*********\n" +
+            "*********\n" +
+            "-*******-\n" +
+            "--*****--\n" +
+            "---***---\n" +
+            "----*----\n"
+        ))).is_quadrilateral());
+    }
+
+    #[test]
+    fn is_quadrilateral_test_3() {
+        assert!(!Shape::from(BinaryImage::from_string(&(
+            "----*----\n".to_owned() +
+            "--*****--\n" +
+            "-*******-\n" +
+            "-*******-\n" +
+            "*********\n" +
+            "*********\n" +
+            "*********\n" +
+            "-*******-\n" +
+            "-*******-\n" +
+            "--*****--\n" +
+            "----*----\n"
+        ))).is_quadrilateral());
     }
 }
