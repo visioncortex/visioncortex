@@ -293,8 +293,8 @@ mod tests {
         assert_eq!(
             Sampler::resample_image(&image, 3, 2).to_string(),
             BinaryImage::from_string(&(
-                "*--\n".to_owned()+
-                "-**\n")).to_string()
+                "**-\n".to_owned()+
+                "--*\n")).to_string()
         )
     }
 

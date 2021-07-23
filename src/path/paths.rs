@@ -69,20 +69,20 @@ where
     /// An offset is specified to apply an offset to the display points (useful when displaying on canvas elements).
     /// 
     /// If `close` is true, assume the last point of the path repeats the first point
-    pub fn to_svg_string(&self, close: bool, offset: &T) -> String {
+    pub fn to_svg_string(&self, close: bool, offset: &T, precision: Option<u32>) -> String {
         let o = *offset;
         let mut string = String::new();
 
         self.path
             .iter()
             .take(1)
-            .for_each(|p| write!(&mut string, "M{} ", (*p+o).to_svg_string()).unwrap());
+            .for_each(|p| write!(&mut string, "M{} ", (*p+o).to_svg_string(precision)).unwrap());
 
         self.path
             .iter()
             .skip(1)
             .take(self.path.len() - if close { 2 } else { 1 })
-            .for_each(|p| write!(&mut string, "L{} ", (*p+o).to_svg_string()).unwrap());
+            .for_each(|p| write!(&mut string, "L{} ", (*p+o).to_svg_string(precision)).unwrap());
 
         if close {
             write!(&mut string, "Z ").unwrap();
@@ -248,7 +248,7 @@ mod tests {
         path.add(PointI32 { x: 0, y: 0 });
         path.add(PointI32 { x: 1, y: 0 });
         path.add(PointI32 { x: 1, y: 1 });
-        assert_eq!("M0,0 L1,0 L1,1 ", path.to_svg_string(false, &PointI32::default()));
+        assert_eq!("M0,0 L1,0 L1,1 ", path.to_svg_string(false, &PointI32::default(), None));
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
         path.add(PointI32 { x: 0, y: 0 });
         path.add(PointI32 { x: 1, y: 0 });
         path.add(PointI32 { x: 1, y: 1 });
-        assert_eq!("M1,1 L2,1 L2,2 ", path.to_svg_string(false, &PointI32 { x: 1, y: 1 }));
+        assert_eq!("M1,1 L2,1 L2,2 ", path.to_svg_string(false, &PointI32 { x: 1, y: 1 }, None));
     }
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
         path.add(PointI32 { x: 1, y: 0 });
         path.add(PointI32 { x: 1, y: 1 });
         path.add(PointI32 { x: 0, y: 0 });
-        assert_eq!("M0,0 L1,0 L1,1 Z ", path.to_svg_string(true, &PointI32::default()));
+        assert_eq!("M0,0 L1,0 L1,1 Z ", path.to_svg_string(true, &PointI32::default(), None));
     }
 
     #[test]
@@ -428,5 +428,47 @@ mod tests {
             ]
         };
         assert!(path.reduce(2.0).is_none());
+    }
+
+    #[test]
+    fn test_path_to_svg_precision_i32() {
+        let path = Path {
+            path: vec![
+                PointI32 { x: 0, y: 0 },
+                PointI32 { x: 2, y: 3 },
+                PointI32 { x: 4, y: 5 },
+            ]
+        };
+        assert_eq!(
+            path.to_svg_string(false, &PointI32 { x: 0, y: 0 }, None),
+            "M0,0 L2,3 L4,5 ".to_owned()
+        );
+        assert_eq!(
+            path.to_svg_string(false, &PointI32 { x: 0, y: 0 }, Some(2)),
+            "M0,0 L2,3 L4,5 ".to_owned()
+        );
+    }
+
+    #[test]
+    fn test_path_to_svg_precision_f64() {
+        let path = Path {
+            path: vec![
+                PointF64 { x: 2.22, y: 2.67 },
+                PointF64 { x: 3.50, y: 3.48 },
+                PointF64 { x: 0.0, y: 0.0 },
+            ]
+        };
+        assert_eq!(
+            path.to_svg_string(false, &PointF64 { x: 0.0, y: 0.0 }, None),
+            "M2.22,2.67 L3.5,3.48 L0,0 ".to_owned()
+        );
+        assert_eq!(
+            path.to_svg_string(false, &PointF64 { x: 0.0, y: 0.0 }, Some(1)),
+            "M2.2,2.7 L3.5,3.5 L0,0 ".to_owned()
+        );
+        assert_eq!(
+            path.to_svg_string(false, &PointF64 { x: 0.0, y: 0.0 }, Some(0)),
+            "M2,3 L4,3 L0,0 ".to_owned()
+        );
     }
 }

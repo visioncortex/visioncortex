@@ -9,15 +9,49 @@ pub struct Point2<T> {
 }
 
 pub trait ToSvgString {
-    fn to_svg_string(&self) -> String;
+    fn to_svg_string(&self, precision: Option<u32>) -> String;
 }
 
 impl<T> ToSvgString for Point2<T> 
 where
-    T: Display
+    T: Copy + NumberFormat
 {
-    fn to_svg_string(&self) -> String {
-        format!("{},{}", self.x, self.y)
+    fn to_svg_string(&self, precision: Option<u32>) -> String {
+        format!("{},{}", Self::number_format(self.x, precision), Self::number_format(self.y, precision))
+    }
+}
+
+pub trait NumberFormat: Display {
+    fn number_format(num: Self, precision: Option<u32>) -> String;
+}
+
+impl NumberFormat for i32 {
+    fn number_format(num: Self, _precision: Option<u32>) -> String {
+        format!("{}", num)
+    }
+}
+
+impl NumberFormat for f64 {
+    fn number_format(num: Self, precision: Option<u32>) -> String {
+        match precision {
+            None => format!("{}", num),
+            Some(0) => format!("{1:.0$}", 0, num),
+            Some(p) => {
+                let mut string: String = format!("{1:.0$}", p as usize, num);
+                string = string.trim_end_matches('0').trim_end_matches('.').to_owned();
+                string
+            },
+        }
+    }
+}
+
+impl<T> Point2<T>
+where
+    T: NumberFormat,
+{
+    #[inline]
+    pub(crate) fn number_format(num: T, precision: Option<u32>) -> String {
+        NumberFormat::number_format(num, precision)
     }
 }
 
@@ -163,5 +197,36 @@ mod tests {
         // should be close to PointF64 { x: 0.0, y: 1.0 }
         assert!(-0.000000001 < r.x && r.x < 0.000000001);
         assert!(1.0 - 0.000000001 < r.y && r.y < 1.0 + 0.000000001);
+    }
+
+    #[test]
+    fn test_round_i32() {
+        let z = PointI32 { x: 0, y: 2 };
+        assert_eq!(z.to_svg_string(None), "0,2");
+        assert_eq!(z.to_svg_string(Some(5)), "0,2");
+
+        let r = PointI32 { x: 1, y: 2 };
+        assert_eq!(r.to_svg_string(None), "1,2");
+        assert_eq!(r.to_svg_string(Some(5)), "1,2");
+    }
+
+    #[test]
+    fn test_round_f64() {
+        let z = PointF64 { x: 0.0, y: 0.1 };
+        assert_eq!(z.to_svg_string(Some(0)), "0,0");
+        assert_eq!(z.to_svg_string(Some(1)), "0,0.1");
+        assert_eq!(z.to_svg_string(Some(2)), "0,0.1");
+        assert_eq!(z.to_svg_string(None), "0,0.1");
+
+        let p = PointF64 { x: 1.21786434, y: 2.98252586 };
+        assert_eq!(p.to_svg_string(Some(0)), "1,3");
+        assert_eq!(p.to_svg_string(Some(1)), "1.2,3");
+        assert_eq!(p.to_svg_string(Some(2)), "1.22,2.98");
+        assert_eq!(p.to_svg_string(Some(3)), "1.218,2.983");
+        assert_eq!(p.to_svg_string(Some(4)), "1.2179,2.9825");
+        assert_eq!(p.to_svg_string(Some(5)), "1.21786,2.98253");
+        assert_eq!(p.to_svg_string(Some(6)), "1.217864,2.982526");
+        assert_eq!(p.to_svg_string(Some(7)), "1.2178643,2.9825259");
+        assert_eq!(p.to_svg_string(None), "1.21786434,2.98252586");
     }
 }

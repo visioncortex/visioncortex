@@ -125,7 +125,7 @@ impl Spline {
     }
 
     /// Converts spline to svg path. Panic if the length of spline is not valid (not 1+3n for some integer n)
-    pub fn to_svg_string(&self, close: bool, offset: &PointF64) -> String {
+    pub fn to_svg_string(&self, close: bool, offset: &PointF64, precision: Option<u32>) -> String {
 
         let o = offset;
 
@@ -139,15 +139,15 @@ impl Spline {
 
         let points = &self.points;
         let len = points.len();
-        let mut result: Vec<String> = vec![format!("M{} {} ", points[0].x + o.x, points[0].y + o.y)];
+        let mut result: Vec<String> = vec![format!("M{} {} ", PointF64::number_format(points[0].x + o.x, precision), PointF64::number_format(points[0].y + o.y, precision))];
 
         let mut i = 1;
         while i < len {
             result.push(
                 format!("C{} {} {} {} {} {} ",
-                points[i].x + o.x, points[i].y + o.y,
-                points[i+1].x + o.x, points[i+1].y + o.y,
-                points[i+2].x + o.x, points[i+2].y + o.y)
+                PointF64::number_format(points[i].x + o.x, precision), PointF64::number_format(points[i].y + o.y, precision),
+                PointF64::number_format(points[i+1].x + o.x, precision), PointF64::number_format(points[i+1].y + o.y, precision),
+                PointF64::number_format(points[i+2].x + o.x, precision), PointF64::number_format(points[i+2].y + o.y, precision))
             );
             i += 3;
         }
@@ -178,4 +178,33 @@ impl Spline {
         subpath
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spline_to_svg() {
+        let spline = Spline {
+            points: vec![
+                PointF64 { x: 2.22, y: 2.67 },
+                PointF64 { x: 3.50, y: 3.48 },
+                PointF64 { x: 4.19, y: 4.72 },
+                PointF64 { x: 5.68, y: 5.26 },
+            ]
+        };
+        assert_eq!(
+            spline.to_svg_string(false, &PointF64 { x: 0.0, y: 0.0 }, None),
+            "M2.22 2.67 C3.5 3.48 4.19 4.72 5.68 5.26 ".to_owned()
+        );
+        assert_eq!(
+            spline.to_svg_string(false, &PointF64 { x: 0.0, y: 0.0 }, Some(1)),
+            "M2.2 2.7 C3.5 3.5 4.2 4.7 5.7 5.3 ".to_owned()
+        );
+        assert_eq!(
+            spline.to_svg_string(false, &PointF64 { x: 0.0, y: 0.0 }, Some(0)),
+            "M2 3 C4 3 4 5 6 5 ".to_owned()
+        );
+    }
 }

@@ -47,7 +47,7 @@ impl CompoundPath {
     }
 
     /// returns a single svg path string in relative path syntax and offset
-    pub fn to_svg_string(&self, close: bool, offset: PointF64) -> (String, PointF64) {
+    pub fn to_svg_string(&self, close: bool, offset: PointF64, precision: Option<u32>) -> (String, PointF64) {
         let origin = if !self.paths.is_empty() {
             match &self.paths[0] {
                 CompoundPathElement::PathI32(p) => -p.path[0].to_point_f64(),
@@ -60,9 +60,9 @@ impl CompoundPath {
 
         let string = self.paths.iter().map(|p| {
             match p {
-                CompoundPathElement::PathI32(p) => p.to_svg_string(close, &origin.to_point_i32()),
-                CompoundPathElement::PathF64(p) => p.to_svg_string(close, &origin),
-                CompoundPathElement::Spline(p) => p.to_svg_string(close, &origin),
+                CompoundPathElement::PathI32(p) => p.to_svg_string(close, &origin.to_point_i32(), precision),
+                CompoundPathElement::PathF64(p) => p.to_svg_string(close, &origin, precision),
+                CompoundPathElement::Spline(p) => p.to_svg_string(close, &origin, precision),
             }
         }).collect::<String>();
 
@@ -129,7 +129,7 @@ mod tests {
         path.add(PointI32 { x: 1, y: 1 });
         paths.add_path_i32(path);
 
-        let (string, offset) = paths.to_svg_string(true, PointF64 { x: 0.0, y: 0.0 });
+        let (string, offset) = paths.to_svg_string(true, PointF64 { x: 0.0, y: 0.0 }, None);
         assert_eq!("M0,0 L1,0 L1,1 Z ", string);
         assert_eq!(offset, PointF64 { x: 1.0, y: 1.0 });
     }
@@ -152,7 +152,7 @@ mod tests {
         path2.add(PointI32 { x: 3, y: 3 });
         paths.add_path_i32(path2);
 
-        let (string, offset) = paths.to_svg_string(true, PointF64 { x: 1.0, y: 1.0 });
+        let (string, offset) = paths.to_svg_string(true, PointF64 { x: 1.0, y: 1.0 }, None);
         assert_eq!("M0,0 L1,0 L1,1 Z M2,2 L3,2 L3,3 Z ", string);
         assert_eq!(offset, PointF64 { x: 2.0, y: 2.0 });
     }
