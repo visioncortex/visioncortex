@@ -1,6 +1,6 @@
 use crate::{BinaryImage, PointI32};
 
-/// Handles Path Walking with straight run optimization
+/// Walks the boundary of a `BinaryImage` with straight run optimization
 pub struct PathWalker<'a> {
     image: &'a BinaryImage,
     start: PointI32,
@@ -12,6 +12,8 @@ pub struct PathWalker<'a> {
     first: bool,
 }
 
+/// Walks a square region in a spiral (clockwise; assuming top-left origin) manner, 
+/// starting from the center
 pub struct SpiralWalker {
     pub x: i32,
     pub y: i32,

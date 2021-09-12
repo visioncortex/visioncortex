@@ -1,3 +1,5 @@
+//! Functions to compute and manipulate bounding rectangles
+
 use std::cmp::min;
 use crate::{PointI32, disjoint_sets};
 

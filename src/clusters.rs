@@ -1,3 +1,5 @@
+//! Algorithm to cluster a binary image
+
 use crate::{BinaryImage, BoundingRect, CompoundPath, MonoImage, MonoImageItem, PathI32, PathSimplifyMode, PointI32, Shape, Spline};
 
 /// A cluster of binary image pixels

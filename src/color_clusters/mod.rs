@@ -1,4 +1,4 @@
-//! Algorithm to build an image binary tree
+//! Algorithm to cluster a color image and build a tree of clusters
 //! 
 //! The hierarchical structure resembles the human visual cortex.
 //! 

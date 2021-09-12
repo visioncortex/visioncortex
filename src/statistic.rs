@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-/// Simple statistics
+/// Simple statistics: (mean and standard deviation)
 #[derive(Debug, Default, std::cmp::PartialEq)]
 pub struct SimpleStat {
     pub count: i32,
@@ -9,7 +9,7 @@ pub struct SimpleStat {
     pub deviation: f64,
 }
 
-/// Sample statistics
+/// Sample statistics: (mean, mode, median and standard deviation)
 #[derive(Debug, Default, std::cmp::PartialEq)]
 pub struct SampleStat {
     pub count: i32,
@@ -23,6 +23,7 @@ pub struct SampleStat {
 }
 
 #[derive(Default)]
+/// Class to calculate `SimpleStat`
 pub struct SimpleStatBuilder {
     sum: i32,
     sqsum: u64,
@@ -30,6 +31,7 @@ pub struct SimpleStatBuilder {
 }
 
 #[derive(Default)]
+/// Class to calculate `SampleStat`
 pub struct SampleStatBuilder {
     simple: SimpleStatBuilder,
     sequence: Vec<i32>,

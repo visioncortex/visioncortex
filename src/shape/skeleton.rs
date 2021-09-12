@@ -1,6 +1,6 @@
 use crate::{BinaryImage, MonoImage, MonoImageItem, SampleStat, SampleStatBuilder, Shape};
 
-/// The medial axis
+/// The skeleton of a binary image (aka medial axis)
 pub struct Skeleton {
     pub image: BinaryImage,
     pub stat: SampleStat,
