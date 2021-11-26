@@ -208,6 +208,12 @@ impl BoundingRect {
         self.bottom += p.y;
     }
 
+    /// Tolerance means:
+    ///     1. Extend each boundary on both sides by `tolerance` units along its direction.
+    ///     2. `true` is returned iff `p` lies on either one of the extended boundaries.
+    /// 
+    /// A point `p` lying on boundary "strictly" means this function returns true with `p`
+    /// and `tolerance` set as 0.
     pub fn have_point_on_boundary(&self, p: PointI32, tolerance: usize) -> bool {
         let t = tolerance as i32;
         // On left or right bounds
@@ -223,6 +229,7 @@ impl BoundingRect {
         (self.top < p.y && p.y < self.bottom)
     }
 
+    /// For definition of `boundary_tolerance`, see BoundingRect::have_point_on_boundary().
     pub fn have_point_on_boundary_or_inside(&self, p: PointI32, boundary_tolerance: usize) -> bool {
         self.have_point_on_boundary(p, boundary_tolerance) || self.have_point_inside(p)
     }
