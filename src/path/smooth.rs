@@ -200,21 +200,18 @@ impl SubdivideSmooth {
     fn find_new_point_from_4_point_scheme(
         p_i: &PointF64, p_j: &PointF64, p_1: &PointF64, p_2: &PointF64, outset_ratio: f64
     ) -> PointF64 {
-
         let mid_out = find_mid_point(p_i, p_j);
         let mid_in = find_mid_point(p_1, p_2);
 
-        let vector_out: PointF64 = mid_out - mid_in;
-        let new_magnitude = norm(&vector_out) / outset_ratio;
-        if new_magnitude < 1e-5 {
+        let vector_out = mid_out - mid_in;
+        let new_magnitude = vector_out.norm() / outset_ratio;
+        if new_magnitude < f64::EPSILON {
             // mid_out == mid_in in this case
             return mid_out;
         }
-        let unit_vector = normalize(&vector_out);
-        let frac_vector = PointF64 {x: unit_vector.x * new_magnitude, y: unit_vector.y * new_magnitude};
 
         // Point out from mid_out
-        mid_out + frac_vector
+        mid_out + vector_out.get_normalized() * new_magnitude
     }
 
     fn retract_handles(a: &PointF64, b: &PointF64, c: &PointF64, d: &PointF64) -> [PointF64; 4] {
