@@ -1,10 +1,10 @@
-use std::fmt::Write;
-use std::ops::{Add, AddAssign, Sub, Mul};
+use std::fmt::{Debug, Write};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Range, RangeFrom, RangeInclusive, Sub};
 
 use crate::{BinaryImage, Point2, PointF64, PointI32, Shape, ToSvgString};
 use super::{PathSimplify, PathSimplifyMode, PathWalker, smooth::SubdivideSmooth, reduce::reduce};
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 /// Path of generic points in 2D space
 pub struct Path<T> {
     /// T can be PointI32/PointF64, etc. (see src/point.rs).
@@ -25,9 +25,21 @@ impl<T> Path<T>
         }
     }
 
+    /// Creates a 2D Path with 'points' as its points
+    pub fn from_points(points: Vec<T>) -> Self {
+        Self {
+            path: points
+        }
+    }
+
     /// Adds a point to the end of the path
     pub fn add(&mut self, point: T) {
         self.path.push(point);
+    }
+
+    /// Removes the last point from the path and returns it, or None if it is empty.
+    pub fn pop(&mut self) -> Option<T> {
+        self.path.pop()
     }
 
     /// Returns an iterator on the vector of points in the path
@@ -43,6 +55,86 @@ impl<T> Path<T>
     /// Returns true if the path is empty, false otherwise
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+impl<T> Index<usize> for Path<T>
+{
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.path[index]
+    }
+}
+
+impl<T> IndexMut<usize> for Path<T>
+{
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.path[index]
+    }
+}
+
+impl<T> Index<Range<usize>> for Path<T>
+{
+    type Output = [T];
+
+    fn index(&self, index: Range<usize>) -> &Self::Output {
+        &self.path[index]
+    }
+}
+
+impl<T> Index<RangeInclusive<usize>> for Path<T>
+{
+    type Output = [T];
+
+    fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
+        &self.path[index]
+    }
+}
+
+impl<T> Index<RangeFrom<usize>> for Path<T>
+{
+    type Output = [T];
+
+    fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
+        &self.path[index]
+    }
+}
+
+impl<T> Path<T>
+where
+    T: Clone + PartialEq
+{
+    /// Convert a closed path to an open path.
+    /// A clone of 'self' is returned untouched if 'self' is empty or open.
+    pub fn to_open(&self) -> Self {
+        if self.is_empty() {
+            return self.clone();
+        }
+        
+        let len = self.len();
+        if self.path[0] != self.path[len-1] {
+            self.clone()
+        } else {
+            Self::from_points(self.path[0..(len-1)].to_vec())
+        }
+    }
+
+    /// Convert an unclosed path to a closed path.
+    /// A clone of 'self' is returned untouched if 'self' is empty or closed.
+    pub fn to_closed(&self) -> Self {
+        if self.is_empty() {
+            return self.clone();
+        }
+
+        let len = self.len();
+        if self.path[0] == self.path[len-1] {
+            self.clone()
+        } else {
+            let mut points = self.path.clone();
+            points.push(self.path[0].clone());
+            Self::from_points(points)
+        }
     }
 }
 

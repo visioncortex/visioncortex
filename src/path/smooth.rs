@@ -9,7 +9,7 @@ use super::util::{angle, find_intersection, find_mid_point, norm, normalize, sig
 impl SubdivideSmooth {
 
     /// Takes a path forming a polygon, returns a vector of bool representing its corners 
-    /// (angle in radians bigger than threshold).
+    /// (angle in radians bigger than or equal to threshold).
     /// 
     /// Note that the length of output is 1 less than that of the original path,
     /// because the last point of the original path is always equal to the first point for paths of walked polygons (closed path)
@@ -98,13 +98,8 @@ impl SubdivideSmooth {
 
     /// Takes a splice of points, returns 4 control points representing the approximating Bezier curve using a curve-fitter.
     pub fn fit_points_with_bezier(points: &[PointF64]) -> [PointF64; 4] {
-        let mut coords:Vec<Coord2> = vec![];
-    
-        for i in points.iter() {
-            coords.push(Coord2(i.x as f64, i.y as f64));
-        }
-    
-        let opt = bezier::Curve::fit_from_points(&coords, 10.0);
+            
+        let opt = bezier::Curve::fit_from_points(points, 10.0);
         match opt {
             None => [PointF64::default(),PointF64::default(),PointF64::default(),PointF64::default()],
             Some(curves) => {
@@ -116,9 +111,7 @@ impl SubdivideSmooth {
                 let p1 = points[0];
                 let p4 = points[points.len()-1];
     
-                let (cp1, cp2) = curve.control_points;
-                let p2 = PointF64 {x: cp1.0, y: cp1.1};
-                let p3 = PointF64 {x: cp2.0, y: cp2.1};
+                let (p2, p3) = curve.control_points;
     
                 Self::retract_handles(&p1, &p2, &p3, &p4)
             }
@@ -199,10 +192,10 @@ impl SubdivideSmooth {
         // Close path
         new_path.push(new_path[0]);
 
-        (PathF64 { path: new_path }, new_corners, can_terminate_iteration)
+        (PathF64::from_points(new_path), new_corners, can_terminate_iteration)
     }
 
-    /// Finds mid-points between (p_i and p_j) and (p_1 and p_2),
+    /// Finds mid-points between (p_i and p_j) and (p_1 and p_2), where p_i and p_j should be between p_1 and p_2,
     /// then returns the new point constructed by the 4-point scheme
     fn find_new_point_from_4_point_scheme(
         p_i: &PointF64, p_j: &PointF64, p_1: &PointF64, p_2: &PointF64, outset_ratio: f64
