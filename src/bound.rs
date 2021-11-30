@@ -92,6 +92,22 @@ impl BoundingRect {
         }
     }
 
+    pub fn top_left(&self) -> PointI32 {
+        PointI32::new(self.left, self.top)
+    }
+
+    pub fn top_right(&self) -> PointI32 {
+        PointI32::new(self.right, self.top)
+    }
+
+    pub fn bottom_left(&self) -> PointI32 {
+        PointI32::new(self.left, self.bottom)
+    }
+
+    pub fn bottom_right(&self) -> PointI32 {
+        PointI32::new(self.right, self.bottom)
+    }
+
     /// Calculates the squared distance betweeen the center of two `BoundingRect`s.
     pub fn sq_dist(self, other: Self) -> i32 {
         let diff = self.center() - other.center();
@@ -190,6 +206,116 @@ impl BoundingRect {
         self.top += p.y;
         self.right += p.x;
         self.bottom += p.y;
+    }
+
+    /// Tolerance means:
+    ///     1. Extend each boundary on both sides by `tolerance` units along its direction.
+    ///     2. `true` is returned iff `p` lies on either one of the extended boundaries.
+    /// 
+    /// A point `p` lying on boundary "strictly" means this function returns true with `p`
+    /// and `tolerance` set as 0.
+    pub fn have_point_on_boundary(&self, p: PointI32, tolerance: usize) -> bool {
+        let t = tolerance as i32;
+        // On left or right bounds
+        (p.x == self.left || p.x == self.right) && (self.top-t <= p.y && p.y <= self.bottom+t)
+            ||
+        // On top or bottom bounds
+        (p.y == self.top || p.y == self.bottom) && (self.left-t <= p.x && p.x <= self.right+t)
+    }
+
+    pub fn have_point_inside(&self, p: PointI32) -> bool {
+        (self.left < p.x && p.x < self.right)
+        &&
+        (self.top < p.y && p.y < self.bottom)
+    }
+
+    /// For definition of `boundary_tolerance`, see BoundingRect::have_point_on_boundary().
+    pub fn have_point_on_boundary_or_inside(&self, p: PointI32, boundary_tolerance: usize) -> bool {
+        self.have_point_on_boundary(p, boundary_tolerance) || self.have_point_inside(p)
+    }
+
+    /// Given a point on the boundary, return the closest point inside the
+    /// bounding rect. The behavior is undefined unless 'p' is a point on
+    /// boundary (strictly) and the area of this rect is larger than 1.
+    pub fn get_closest_point_inside(&self, p: PointI32) -> PointI32 {
+        assert!(self.have_point_on_boundary(p, 0));
+        assert!(self.width() * self.height() > 1);
+
+        p + PointI32::new(
+            if p.x == self.left {1}
+            else if p.x == self.right {-1}
+            else {0},
+            if p.y == self.top {1}
+            else if p.y == self.bottom {-1}
+            else {0},
+        )
+    }
+
+    /// Given a point on the boundary, return the closest point outside the
+    /// bounding rect. Note that if 'p' is a corner, there are three closest
+    /// points, but the diagonal one is always returned. The behavior is
+    /// undefined unless 'p' is a point on boundary (strictly).
+    pub fn get_closest_point_outside(&self, p: PointI32) -> PointI32 {
+        assert!(self.have_point_on_boundary(p, 0));
+
+        p + PointI32::new(
+            if p.x == self.left {-1}
+            else if p.x == self.right {1}
+            else {0},
+            if p.y == self.top {-1}
+            else if p.y == self.bottom {1}
+            else {0},
+        )
+    }
+
+    /// Starting from 'p', copy the boundary points into a new Vec following
+    /// the orientation specified by 'clockwise' and return it. The behavior
+    /// is undefined unless 'p' is a point on boundary (strictly).
+    pub fn get_boundary_points_from(&self, p: PointI32, clockwise: bool) -> Vec<PointI32> {
+        assert!(self.have_point_on_boundary(p, 0));
+
+        let mut boundary_points = vec![p];
+        // Evaluate the next point to be pushed
+        let mut offset = if p.x == self.left {
+            PointI32::new(0, -1)
+        } else if p.y == self.top {
+            PointI32::new(1, 0)
+        } else if p.x == self.right {
+            PointI32::new(0, 1)
+        } else {
+            PointI32::new(-1, 0)
+        };
+        if !clockwise { offset = -offset; }
+        let mut curr = p + offset;
+        if !self.have_point_on_boundary(curr, 0) {
+            curr = curr.rotate_90deg(p, clockwise);
+        }
+
+        let mut prev = p;
+
+        let four_neighbors_offsets = [
+            PointI32::new(1, 0),
+            PointI32::new(-1, 0),
+            PointI32::new(0, 1),
+            PointI32::new(0, -1),
+        ];
+        
+        while curr != p {
+            boundary_points.push(curr);
+            let temp_curr = curr;
+            for offset in four_neighbors_offsets.iter() {
+                let next = curr + *offset;
+                if next != prev && self.have_point_on_boundary(next, 0) {
+                    curr = next;
+                    break;
+                }
+            }
+            // curr must have changed
+            assert_ne!(curr, boundary_points.last().copied().unwrap());
+            prev = temp_curr;
+        }
+
+        boundary_points
     }
 }
 
@@ -374,5 +500,100 @@ mod tests {
             merge_expand(vec![a, b], 0, 1),
             [[b],[a]]
         );
+    }
+
+    #[test]
+    fn point_on_boundary() {
+        // GIVEN a generic bounding rect and its corners
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 5, 6);
+        let top_left = PointI32::new(rect.left, rect.top);
+        let top_right = PointI32::new(rect.right, rect.top);
+        let bottom_left = PointI32::new(rect.left, rect.bottom);
+        let bottom_right = PointI32::new(rect.right, rect.bottom);
+
+        // WHEN the tolerance for boundary check is the strictest
+        let t = 0;
+
+        // THEN its corners are on its boundary
+        assert!(rect.have_point_on_boundary(top_left, t));
+        assert!(rect.have_point_on_boundary(top_right, t));
+        assert!(rect.have_point_on_boundary(bottom_left, t));
+        assert!(rect.have_point_on_boundary(bottom_right, t));
+
+        // THEN points inside are not on its boundary
+        assert!(!rect.have_point_on_boundary(top_left.translate(PointI32::new(1, 1)), t));
+        assert!(!rect.have_point_on_boundary(top_right.translate(PointI32::new(-1, 1)), t));
+
+        // THEN points outside are not on its boundary
+        assert!(!rect.have_point_on_boundary(bottom_left.translate(PointI32::new(-1, 1)), t));
+        assert!(!rect.have_point_on_boundary(bottom_right.translate(PointI32::new(-1, -1)), t));
+    }
+
+    #[test]
+    fn point_near_boundary() {
+        // GIVEN a generic bounding rect and its corners
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 5, 6);
+        let top_left = PointI32::new(rect.left, rect.top);
+        let top_right = PointI32::new(rect.right, rect.top);
+        let bottom_left = PointI32::new(rect.left, rect.bottom);
+        let bottom_right = PointI32::new(rect.right, rect.bottom);
+
+        // GIVEN points on its boundary
+        let p1 = PointI32::new(rect.left, rect.top + 2);
+        let p2 = PointI32::new(rect.left + 3, rect.bottom);
+
+        // THEN the nearest points of those points should be correctly identified
+        assert_eq!(top_left + PointI32::new(1, 1), rect.get_closest_point_inside(top_left));
+        assert_eq!(top_right + PointI32::new(-1, 1), rect.get_closest_point_inside(top_right));
+        assert_eq!(bottom_left + PointI32::new(1, -1), rect.get_closest_point_inside(bottom_left));
+        assert_eq!(bottom_right + PointI32::new(-1, -1), rect.get_closest_point_inside(bottom_right));
+        assert_eq!(p1 + PointI32::new(1, 0), rect.get_closest_point_inside(p1));
+        assert_eq!(p2 + PointI32::new(0, -1), rect.get_closest_point_inside(p2));
+
+        assert_eq!(top_left - PointI32::new(1, 1), rect.get_closest_point_outside(top_left));
+        assert_eq!(top_right - PointI32::new(-1, 1), rect.get_closest_point_outside(top_right));
+        assert_eq!(bottom_left - PointI32::new(1, -1), rect.get_closest_point_outside(bottom_left));
+        assert_eq!(bottom_right - PointI32::new(-1, -1), rect.get_closest_point_outside(bottom_right));
+        assert_eq!(p1 - PointI32::new(1, 0), rect.get_closest_point_outside(p1));
+        assert_eq!(p2 - PointI32::new(0, -1), rect.get_closest_point_outside(p2));
+    }
+
+    #[test]
+    fn get_vec_of_boundary_points() {
+        // GIVEN a generic bounding rect and some of its corners
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 5, 6);
+        let top_left = PointI32::new(rect.left, rect.top);
+        let bottom_right = PointI32::new(rect.right, rect.bottom);
+
+        // GIVEN points on its boundary
+        let p1 = PointI32::new(rect.left, rect.top + 2);
+        let p2 = PointI32::new(rect.left + 3, rect.bottom);
+
+        // THEN the vecs of boundary points should be correctly extracted
+        let len = ((rect.width() + rect.height()) * 2) as usize;
+
+        let boundary_points = rect.get_boundary_points_from(top_left, true);
+        assert_eq!(len, boundary_points.len());
+        assert_eq!(top_left, boundary_points[0]);
+        assert_eq!(top_left + PointI32::new(1, 0), boundary_points[1]);
+        assert_eq!(top_left + PointI32::new(0, 1), boundary_points[len-1]);
+
+        let boundary_points = rect.get_boundary_points_from(bottom_right, false);
+        assert_eq!(len, boundary_points.len());
+        assert_eq!(bottom_right, boundary_points[0]);
+        assert_eq!(bottom_right + PointI32::new(0, -1), boundary_points[1]);
+        assert_eq!(bottom_right + PointI32::new(-1, 0), boundary_points[len-1]);
+
+        let boundary_points = rect.get_boundary_points_from(p1, true);
+        assert_eq!(len, boundary_points.len());
+        assert_eq!(p1, boundary_points[0]);
+        assert_eq!(p1 + PointI32::new(0, -1), boundary_points[1]);
+        assert_eq!(p1 + PointI32::new(0, 1), boundary_points[len-1]);
+
+        let boundary_points = rect.get_boundary_points_from(p2, false);
+        assert_eq!(len, boundary_points.len());
+        assert_eq!(p2, boundary_points[0]);
+        assert_eq!(p2 + PointI32::new(1, 0), boundary_points[1]);
+        assert_eq!(p2 + PointI32::new(-1, 0), boundary_points[len-1]);
     }
 }

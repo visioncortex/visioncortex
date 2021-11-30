@@ -32,6 +32,10 @@ impl CompoundPath {
         self.paths.iter()
     }
 
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<CompoundPathElement> {
+        self.paths.iter_mut()
+    }
+
     pub fn append(&mut self, mut other: Self) {
         self.paths.append(&mut other.paths);
     }

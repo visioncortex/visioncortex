@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, convert::TryInto};
 use crate::{BinaryImage, PathF64, PointF64, PathSimplifyMode};
 use super::{PathI32, smooth::SubdivideSmooth};
 
@@ -29,6 +29,10 @@ impl Spline {
     /// Returns an iterator on the vector of points on the spline
     pub fn iter(&self) -> std::slice::Iter<PointF64> {
         self.points.iter()
+    }
+
+    pub fn get_control_points(&self) -> Vec<&[PointF64]> {
+        self.points.iter().as_slice().windows(4).step_by(3).collect()
     }
 
     /// Returns the number of points on the spline
