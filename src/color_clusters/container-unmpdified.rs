@@ -39,7 +39,7 @@ impl Clusters {
         }
     }
 }
-#[derive(Copy, Clone)]
+
 pub struct ClustersView<'a> {
     pub width: u32,
     pub height: u32,
@@ -54,7 +54,6 @@ pub struct ClustersOutputIterator<'a> {
     total: usize,
     parent: &'a ClustersView<'a>,
 }
-
 
 impl ClustersView<'_> {
     pub fn iter(&self) -> impl Iterator<Item = &Cluster> {

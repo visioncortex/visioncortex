@@ -28,10 +28,8 @@ pub struct NeighbourInfo {
 
 type Cmp = Box<dyn Fn(Color, Color) -> bool>;
 type Diff = Box<dyn Fn(Color, Color) -> i32>;
-// type Deepen = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
-// type Hollow = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
-type Deepen2 = Box<dyn Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool>;
-type Hollow2 = Box<dyn Fn(&[NeighbourInfo]) -> bool>;
+type Deepen = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
+type Hollow = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
 
 /// the 0th cluster is reserved for internal use
 pub const ZERO: ClusterIndex = ClusterIndex(0);
@@ -42,10 +40,8 @@ pub struct Builder {
     pub(crate) conf: BuilderConfig,
     pub(crate) same: Option<Cmp>,
     pub(crate) diff: Option<Diff>,
-    // pub(crate) deepen: Option<Deepen>,
-    // pub(crate) hollow: Option<Hollow>,
-    pub(crate) deepen2: Option<Deepen2>,
-    pub(crate) hollow2: Option<Hollow2>,
+    pub(crate) deepen: Option<Deepen>,
+    pub(crate) hollow: Option<Hollow>,
     pub(crate) image: Option<ColorImage>,
 }
 
@@ -98,10 +94,8 @@ impl Builder {
 
     closure_setter!(same, Fn(Color, Color) -> bool);
     closure_setter!(diff, Fn(Color, Color) -> i32);
-    // closure_setter!(deepen, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
-    // closure_setter!(hollow, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
-    closure_setter!(deepen2, Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool);
-    closure_setter!(hollow2, Fn(&[NeighbourInfo]) -> bool);
+    closure_setter!(deepen, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
+    closure_setter!(hollow, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
 }
 
 impl IncrementalBuilder {
@@ -140,22 +134,20 @@ struct Area {
     pub count: usize,
 }
 
-pub struct BuilderImpl {
+struct BuilderImpl {
     diagonal: bool,
     hierarchical: u32,
     batch_size: u32,
     key: Color,
     same: Cmp,
     diff: Diff,
-    // deepen: Deepen,
-    // hollow: Hollow,
-    deepen2: Deepen2,
-    hollow2: Hollow2,
-    pub width: u32,
-    pub height: u32,
+    deepen: Deepen,
+    hollow: Hollow,
+    width: u32,
+    height: u32,
     pixels: Vec<u8>,           // raw bytes from getImageData; 4 bytes as a pixel
     clusters: Vec<Cluster>,    // array of clusters
-    pub cluster_indices: Vec<ClusterIndex>, // the cluster index each pixel belongs to
+    cluster_indices: Vec<ClusterIndex>, // the cluster index each pixel belongs to
     cluster_areas: Vec<Area>,  // uniquely sorted array of cluster sizes
     clusters_output: Vec<ClusterIndex>, // indices of good clusters
     stage: u32,
@@ -176,10 +168,8 @@ impl From<Builder> for BuilderImpl {
             key: b.conf.key,
             same: b.same.take().unwrap(),
             diff: b.diff.take().unwrap(),
-            // deepen: b.deepen.take().unwrap(),
-            // hollow: b.hollow.take().unwrap(),
-            deepen2: b.deepen2.take().unwrap(),
-            hollow2: b.hollow2.take().unwrap(),
+            deepen: b.deepen.take().unwrap(),
+            hollow: b.hollow.take().unwrap(),
             width: im.width as u32,
             height: im.height as u32,
             pixels: im.pixels,
@@ -408,7 +398,7 @@ impl BuilderImpl {
 
         for index in 0..self.clusters.len() {
 
-
+            let view = self.view();
             let index = ClusterIndex(index as ClusterIndexElem);
             let mycluster = self.get_cluster(index);
 
@@ -423,7 +413,7 @@ impl BuilderImpl {
 
             let mycolor = mycluster.color();
             let mut infos: Vec<_> = mycluster
-                .neighbours4(&self)
+                .neighbours(&view)
                 .iter()
                 .map(|other| NeighbourInfo {
                     index: *other,
@@ -443,14 +433,14 @@ impl BuilderImpl {
 
             let target = infos[0].index;
 
-            // let view = self.view();
+            let view = self.view();
 
             let deepen = if self.hierarchical == HIERARCHICAL_MAX {
-                (self.deepen2)(&self, &self.get_cluster(index), &infos)
+                (self.deepen)(&view, &self.get_cluster(index), &infos)
             } else {
                 false
             };
-            let hollow = (self.hollow2)(&infos);
+            let hollow = (self.hollow)(&view, &self.get_cluster(index), &infos);
 
             if deepen {
                 self.clusters_output.push(index);
