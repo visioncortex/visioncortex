@@ -80,18 +80,11 @@ impl Runner {
                 color_same(a, b, is_same_color_a, is_same_color_b)
             })
             .diff(color_diff)
-            // .deepen(move |parent: &ClustersView, patch: &Cluster, neighbours: &[NeighbourInfo]| {
-            //     patch_good(parent, patch, good_min_area, good_max_area) &&
-            //     neighbours[0].diff > deepen_diff
-            // })
-            // .hollow(move |_parent: &ClustersView, _patch: &Cluster, neighbours: &[NeighbourInfo]| {
-            //     neighbours.len() <= hollow_neighbours
-            // })
-            .deepen2(move |self_ref: &BuilderImpl, patch: &Cluster, neighbours: &[NeighbourInfo]| {
-                patch_good3(self_ref, patch, good_min_area, good_max_area) &&
+            .deepen(move |self_ref: &BuilderImpl, patch: &Cluster, neighbours: &[NeighbourInfo]| {
+                patch_good(self_ref, patch, good_min_area, good_max_area) &&
                 neighbours[0].diff > deepen_diff
             })
-            .hollow2(move |neighbours: &[NeighbourInfo]| {
+            .hollow(move |neighbours: &[NeighbourInfo]| {
                 neighbours.len() <= hollow_neighbours
             })
     }
@@ -128,23 +121,6 @@ pub fn color_same(a: Color, b: Color, shift: i32, thres: i32) -> bool {
 }
 
 fn patch_good(
-    parent: &ClustersView,
-    patch: &Cluster,
-    good_min_area: usize,
-    good_max_area: usize
-) -> bool {
-    if good_min_area < patch.area() && patch.area() < good_max_area {
-        if good_min_area == 0 ||
-            (patch.perimeter(parent) as usize) < patch.area() {
-            return true;
-        } else {
-            // cluster is thread-like and thinner than 2px
-        }
-    }
-    false
-}
-
-fn patch_good3(
     self_ref: &BuilderImpl,
     patch: &Cluster,
     good_min_area: usize,
@@ -152,7 +128,7 @@ fn patch_good3(
 ) -> bool {
     if good_min_area < patch.area() && patch.area() < good_max_area {
         if good_min_area == 0 ||
-            (patch.perimeter3(self_ref) as usize) < patch.area() {
+            (patch.perimeter(self_ref) as usize) < patch.area() {
             return true;
         } else {
             // cluster is thread-like and thinner than 2px

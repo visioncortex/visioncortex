@@ -55,7 +55,6 @@ pub struct ClustersOutputIterator<'a> {
     parent: &'a ClustersView<'a>,
 }
 
-
 impl ClustersView<'_> {
     pub fn iter(&self) -> impl Iterator<Item = &Cluster> {
         ClustersOutputIterator {

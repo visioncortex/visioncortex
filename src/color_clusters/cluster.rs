@@ -43,26 +43,18 @@ impl Cluster {
     pub fn residue_color(&self) -> Color {
         self.residue_sum.average()
     }
-
-    pub fn perimeter(&self, parent: &ClustersView) -> u32 {
-        Shape::image_boundary_list(&self.to_image(parent)).len() as u32
-    }
-    // pub fn perimeter2(&self, width: u32, height: u32) -> u32 {
-    //     Shape::image_boundary_list(&self.to_image2(width, height)).len() as u32
-    // }
     
-    pub fn perimeter3(&self, self_ref: &BuilderImpl) -> u32 {
-        Shape::image_boundary_list(&self.to_image3(self_ref)).len() as u32
+    pub fn perimeter(&self, self_ref: &BuilderImpl) -> u32 {
+        Shape::image_boundary_list(&self.to_image_self_ref(self_ref)).len() as u32
     }
 
     pub fn to_image(&self, parent: &ClustersView) -> BinaryImage {
         self.to_image_with_hole(parent, true)
     }
-    // pub fn to_image2(&self, width: u32, height: u32) -> BinaryImage {
-    //     self.to_image_with_hole2(width, height, true)
-    // }
-    pub fn to_image3(&self, self_ref: &BuilderImpl) -> BinaryImage {
-        self.to_image_with_hole3(self_ref, true)
+    //Change the argument for to_image from ClusterView to a reference of BuilderImpl to improve 
+    //the speed
+    pub fn to_image_self_ref(&self, self_ref: &BuilderImpl) -> BinaryImage {
+        self.to_image_with_hole_self_ref(self_ref, true)
     }
 
     pub fn to_image_with_hole(&self, parent: &ClustersView, hole: bool) -> BinaryImage {
@@ -86,8 +78,9 @@ impl Cluster {
 
         image
     }
-
-    pub fn to_image_with_hole3(&self, self_ref: &BuilderImpl, hole: bool) -> BinaryImage {
+    //Change the argument of to_image_with_hole function from ClusterView to a reference of 
+    //BuilderImpl to improve the speed
+    pub fn to_image_with_hole_self_ref(&self, self_ref: &BuilderImpl, hole: bool) -> BinaryImage {
         let width = self.rect.width() as usize;
         let height = self.rect.height() as usize;
         let mut image = BinaryImage::new_w_h(width, height);
@@ -157,35 +150,7 @@ impl Cluster {
         paths
     }
 
-    pub fn neighbours(&self, parent: &ClustersView) -> Vec<ClusterIndex> {
-        let myself = parent.get_cluster_at(*self.indices.first().unwrap());
-        let mut neighbours = HashSet::new();
-
-        for &i in self.iter() {
-            let x = i % parent.width;
-            let y = i / parent.width;
-
-            for k in 0..4 {
-                let index = match k {
-                    0 => if y > 0 { parent.cluster_indices[(parent.width * (y - 1) + x) as usize] } else { ZERO },
-                    1 => if y < parent.height - 1 { parent.cluster_indices[(parent.width * (y + 1) + x) as usize] } else { ZERO },
-                    2 => if x > 0 { parent.cluster_indices[(parent.width * y + (x - 1)) as usize] } else { ZERO },
-                    3 => if x < parent.width - 1 { parent.cluster_indices[(parent.width * y + (x + 1)) as usize] } else { ZERO },
-                    _ => unreachable!(),
-                };
-                if index != ZERO && index != myself {
-                    neighbours.insert(index);
-                }
-            }
-        }
-
-        let mut list: Vec<ClusterIndex> = neighbours.into_iter().collect();
-        list.sort();
-        list
-    }
-
-    pub fn neighbours4(&self, self_ref: &BuilderImpl) -> Vec<ClusterIndex> {
-
+    pub fn neighbours(&self, self_ref: &BuilderImpl) -> Vec<ClusterIndex> {
         let myself = self_ref.cluster_indices[*self.indices.first().unwrap() as usize];
         let mut neighbours = HashSet::new();
 
