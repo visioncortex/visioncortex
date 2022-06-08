@@ -143,11 +143,11 @@ pub struct BuilderImpl {
     diff: Diff,
     deepen: Deepen,
     hollow: Hollow,
-    pub width: u32,
-    pub height: u32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
     pixels: Vec<u8>,           // raw bytes from getImageData; 4 bytes as a pixel
     clusters: Vec<Cluster>,    // array of clusters
-    pub cluster_indices: Vec<ClusterIndex>, // the cluster index each pixel belongs to
+    pub(crate) cluster_indices: Vec<ClusterIndex>, // the cluster index each pixel belongs to
     cluster_areas: Vec<Area>,  // uniquely sorted array of cluster sizes
     clusters_output: Vec<ClusterIndex>, // indices of good clusters
     stage: u32,
