@@ -128,7 +128,7 @@ fn patch_good(
 ) -> bool {
     if good_min_area < patch.area() && patch.area() < good_max_area {
         if good_min_area == 0 ||
-            (patch.perimeter(self_ref) as usize) < patch.area() {
+            (patch.perimeter_self_ref(self_ref) as usize) < patch.area() {
             return true;
         } else {
             // cluster is thread-like and thinner than 2px

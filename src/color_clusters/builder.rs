@@ -412,7 +412,7 @@ impl BuilderImpl {
 
             let mycolor = mycluster.color();
             let mut infos: Vec<_> = mycluster
-                .neighbours(&self)
+                .neighbours_self_ref(&self)
                 .iter()
                 .map(|other| NeighbourInfo {
                     index: *other,

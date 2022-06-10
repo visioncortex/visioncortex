@@ -39,7 +39,7 @@ impl Clusters {
         }
     }
 }
-#[derive(Copy, Clone)]
+
 pub struct ClustersView<'a> {
     pub width: u32,
     pub height: u32,
