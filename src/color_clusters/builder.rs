@@ -2,12 +2,21 @@ use std::collections::HashMap;
 use crate::{Color, ColorImage};
 use super::{Cluster, Clusters, ClustersView, container::ClusterIndex, container::ClusterIndexElem};
 
+// Describes what to do with pixels that match the key color
+#[derive(Default, Clone, Copy)]
+pub enum KeyingAction {
+    #[default]
+    Keep,
+    Discard,
+}
+
 #[derive(Clone)]
 pub struct BuilderConfig {
     pub(crate) diagonal: bool,
     pub(crate) hierarchical: u32,
     pub(crate) batch_size: u32,
     pub(crate) key: Color,
+    pub(crate) keying_action: KeyingAction,
 }
 
 impl Default for BuilderConfig {
@@ -17,6 +26,7 @@ impl Default for BuilderConfig {
             hierarchical: HIERARCHICAL_MAX,
             batch_size: 10000,
             key: Color::default(),
+            keying_action: KeyingAction::default(),
         }
     }
 }
@@ -91,6 +101,7 @@ impl Builder {
     config_setter!(hierarchical, u32);
     config_setter!(batch_size, u32);
     config_setter!(key, Color);
+    config_setter!(keying_action, KeyingAction);
 
     closure_setter!(same, Fn(Color, Color) -> bool);
     closure_setter!(diff, Fn(Color, Color) -> i32);
@@ -139,6 +150,7 @@ struct BuilderImpl {
     hierarchical: u32,
     batch_size: u32,
     key: Color,
+    keying_action: KeyingAction,
     same: Cmp,
     diff: Diff,
     deepen: Deepen,
@@ -166,6 +178,7 @@ impl From<Builder> for BuilderImpl {
             hierarchical: b.conf.hierarchical,
             batch_size: b.conf.batch_size,
             key: b.conf.key,
+            keying_action: b.conf.keying_action,
             same: b.same.take().unwrap(),
             diff: b.diff.take().unwrap(),
             deepen: b.deepen.take().unwrap(),
@@ -261,6 +274,7 @@ impl BuilderImpl {
         let diagonal = self.diagonal;
         let batch_size = self.batch_size;
         let key = self.key;
+        let keying_action = self.keying_action;
         let has_key = key != Color::default();
         let len = self.cluster_indices.len();
 
@@ -314,7 +328,10 @@ impl BuilderImpl {
             let c = color.unwrap();
 
             if has_key && c == key {
-                self.get_cluster_mut(ZERO).add(i, &c, x, y);
+                match keying_action {
+                    KeyingAction::Keep => self.get_cluster_mut(ZERO).add(i, &c, x, y),
+                    KeyingAction::Discard => {},
+                }
             } else if self.is_same(color, up) && self.is_same(color, upleft) {
                 self.cluster_indices[i as usize] = cluster_up;
                 self.get_cluster_mut(cluster_up).add(i, &c, x, y);

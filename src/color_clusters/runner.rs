@@ -17,6 +17,7 @@ pub struct RunnerConfig {
     pub deepen_diff: i32,
     pub hollow_neighbours: usize,
     pub key_color: Color,
+    pub keying_action: KeyingAction,
 }
 
 impl Default for RunnerConfig {
@@ -32,6 +33,7 @@ impl Default for RunnerConfig {
             deepen_diff: 64,
             hollow_neighbours: 1,
             key_color: Color::default(),
+            keying_action: KeyingAction::default(),
         }
     }
 }
@@ -70,6 +72,7 @@ impl Runner {
             deepen_diff,
             hollow_neighbours,
             key_color,
+            keying_action,
         } = self.config;
 
         assert!(is_same_color_a < 8);
@@ -79,6 +82,7 @@ impl Runner {
             .diagonal(diagonal)
             .hierarchical(hierarchical)
             .key(key_color)
+            .keying_action(keying_action)
             .batch_size(batch_size as u32)
             .same(move |a: Color, b: Color| {
                 color_same(a, b, is_same_color_a, is_same_color_b)

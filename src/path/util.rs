@@ -13,7 +13,7 @@ pub(super) fn signed_area(p1: PointI32, p2: PointI32, p3: PointI32) -> i32 {
 /// https://github.com/tyt2y3/vaser-unity/blob/master/Assets/Vaser/Vec2Ext.cs#L107 (Intersect)
 pub(super) fn find_intersection(p1: &PointF64, p2: &PointF64, p3: &PointF64, p4: &PointF64) -> PointF64 {
 
-    const EPSILON: f64 = f64::EPSILON;
+    const EPSILON: f64 = 1e-7;
     
     let (denom, numera, numerb);
     denom  = (p4.y-p3.y) * (p2.x-p1.x) - (p4.x-p3.x) * (p2.y-p1.y);
