@@ -13,6 +13,8 @@ pub(super) fn signed_area(p1: PointI32, p2: PointI32, p3: PointI32) -> i32 {
 /// https://github.com/tyt2y3/vaser-unity/blob/master/Assets/Vaser/Vec2Ext.cs#L107 (Intersect)
 pub(super) fn find_intersection(p1: &PointF64, p2: &PointF64, p3: &PointF64, p4: &PointF64) -> PointF64 {
 
+    // Notes: for some reason ShapeSense used f64::EPSILON, now it's being reverted to the original value.
+    // we might want to make this a parameter if this proves to become a problem.
     const EPSILON: f64 = 1e-7;
     
     let (denom, numera, numerb);
