@@ -439,10 +439,8 @@ impl BuilderImpl {
                 .collect();
 
             if infos.is_empty() {
-                if self.iteration == self.cluster_areas.len() as ClusterIndexElem - 1 {
-                    // this is the final background
-                    self.clusters_output.push(index);
-                }
+                // this is either the final background, or an isolated cluster surrounded by transparency
+                self.clusters_output.push(index);
                 continue;
             }
 
