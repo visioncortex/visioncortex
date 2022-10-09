@@ -412,6 +412,7 @@ impl BuilderImpl {
         }
 
         let cur_area = self.cluster_areas[self.iteration as usize].area;
+        let can_discard_pixels = matches!(self.keying_action, KeyingAction::Discard);
 
         for index in 0..self.clusters.len() {
 
@@ -439,8 +440,8 @@ impl BuilderImpl {
                 .collect();
 
             if infos.is_empty() {
-                if self.iteration == self.cluster_areas.len() as ClusterIndexElem - 1 {
-                    // this is the final background
+                if self.iteration == self.cluster_areas.len() as ClusterIndexElem - 1  || can_discard_pixels {
+                    // this is either the final background, or an isolated cluster surrounded by keyed, discarded pixels
                     self.clusters_output.push(index);
                 }
                 continue;
