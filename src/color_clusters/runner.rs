@@ -88,11 +88,11 @@ impl Runner {
                 color_same(a, b, is_same_color_a, is_same_color_b)
             })
             .diff(color_diff)
-            .deepen(move |parent: &ClustersView, patch: &Cluster, neighbours: &[NeighbourInfo]| {
-                patch_good(parent, patch, good_min_area, good_max_area) &&
+            .deepen(move |internal: &BuilderImpl, patch: &Cluster, neighbours: &[NeighbourInfo]| {
+                patch_good(internal, patch, good_min_area, good_max_area) &&
                 neighbours[0].diff > deepen_diff
             })
-            .hollow(move |_parent: &ClustersView, _patch: &Cluster, neighbours: &[NeighbourInfo]| {
+            .hollow(move |_internal: &BuilderImpl, _patch: &Cluster, neighbours: &[NeighbourInfo]| {
                 neighbours.len() <= hollow_neighbours
             })
     }
@@ -129,14 +129,14 @@ pub fn color_same(a: Color, b: Color, shift: i32, thres: i32) -> bool {
 }
 
 fn patch_good(
-    parent: &ClustersView,
+    internal: &BuilderImpl,
     patch: &Cluster,
     good_min_area: usize,
     good_max_area: usize
 ) -> bool {
     if good_min_area < patch.area() && patch.area() < good_max_area {
         if good_min_area == 0 ||
-            (patch.perimeter(parent) as usize) < patch.area() {
+            (patch.perimeter_internal(internal) as usize) < patch.area() {
             return true;
         } else {
             // cluster is thread-like and thinner than 2px
