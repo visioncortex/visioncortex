@@ -412,7 +412,7 @@ impl BuilderImpl {
         }
 
         let cur_area = self.cluster_areas[self.iteration as usize].area;
-        let can_discard_pixels = matches!(self.keying_action, KeyingAction::Discard);
+        let can_discard_pixels = matches!(self.keying_action, KeyingAction::Discard) && self.key != Color::default();
 
         for index in 0..self.clusters.len() {
 
