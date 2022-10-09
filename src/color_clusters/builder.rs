@@ -29,7 +29,7 @@ pub struct NeighbourInfo {
 type Cmp = Box<dyn Fn(Color, Color) -> bool>;
 type Diff = Box<dyn Fn(Color, Color) -> i32>;
 type Deepen = Box<dyn Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool>;
-type Hollow = Box<dyn Fn(&[NeighbourInfo]) -> bool>;
+type Hollow = Box<dyn Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool>;
 
 /// the 0th cluster is reserved for internal use
 pub const ZERO: ClusterIndex = ClusterIndex(0);
@@ -95,7 +95,7 @@ impl Builder {
     closure_setter!(same, Fn(Color, Color) -> bool);
     closure_setter!(diff, Fn(Color, Color) -> i32);
     closure_setter!(deepen, Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool);
-    closure_setter!(hollow, Fn(&[NeighbourInfo]) -> bool);
+    closure_setter!(hollow, Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool);
 }
 
 impl IncrementalBuilder {
@@ -412,7 +412,7 @@ impl BuilderImpl {
 
             let mycolor = mycluster.color();
             let mut infos: Vec<_> = mycluster
-                .neighbours_self_ref(&self)
+                .neighbours_internal(self)
                 .iter()
                 .map(|other| NeighbourInfo {
                     index: *other,
@@ -433,11 +433,11 @@ impl BuilderImpl {
             let target = infos[0].index;
 
             let deepen = if self.hierarchical == HIERARCHICAL_MAX {
-                (self.deepen)(&self, &self.get_cluster(index), &infos)
+                (self.deepen)(self, self.get_cluster(index), &infos)
             } else {
                 false
             };
-            let hollow = (self.hollow)(&infos);
+            let hollow = (self.hollow)(self, self.get_cluster(index), &infos);
 
             if deepen {
                 self.clusters_output.push(index);
@@ -507,7 +507,7 @@ impl BuilderImpl {
             self.cluster_indices[i as usize] = to;
         }
 
-        let mut indices = std::mem::replace(&mut self.clusters[from.0 as usize].indices, Vec::new());
+        let mut indices = std::mem::take(&mut self.clusters[from.0 as usize].indices);
         self.clusters[to.0 as usize].indices.append(&mut indices);
         let sum = self.clusters[from.0 as usize].sum;
         let rect = self.clusters[from.0 as usize].rect;
