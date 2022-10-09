@@ -28,8 +28,8 @@ pub struct NeighbourInfo {
 
 type Cmp = Box<dyn Fn(Color, Color) -> bool>;
 type Diff = Box<dyn Fn(Color, Color) -> i32>;
-type Deepen = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
-type Hollow = Box<dyn Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool>;
+type Deepen = Box<dyn Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool>;
+type Hollow = Box<dyn Fn(&[NeighbourInfo]) -> bool>;
 
 /// the 0th cluster is reserved for internal use
 pub const ZERO: ClusterIndex = ClusterIndex(0);
@@ -94,8 +94,8 @@ impl Builder {
 
     closure_setter!(same, Fn(Color, Color) -> bool);
     closure_setter!(diff, Fn(Color, Color) -> i32);
-    closure_setter!(deepen, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
-    closure_setter!(hollow, Fn(&ClustersView, &Cluster, &[NeighbourInfo]) -> bool);
+    closure_setter!(deepen, Fn(&BuilderImpl, &Cluster, &[NeighbourInfo]) -> bool);
+    closure_setter!(hollow, Fn(&[NeighbourInfo]) -> bool);
 }
 
 impl IncrementalBuilder {
@@ -134,7 +134,7 @@ struct Area {
     pub count: usize,
 }
 
-struct BuilderImpl {
+pub struct BuilderImpl {
     diagonal: bool,
     hierarchical: u32,
     batch_size: u32,
@@ -143,11 +143,11 @@ struct BuilderImpl {
     diff: Diff,
     deepen: Deepen,
     hollow: Hollow,
-    width: u32,
-    height: u32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
     pixels: Vec<u8>,           // raw bytes from getImageData; 4 bytes as a pixel
     clusters: Vec<Cluster>,    // array of clusters
-    cluster_indices: Vec<ClusterIndex>, // the cluster index each pixel belongs to
+    pub(crate) cluster_indices: Vec<ClusterIndex>, // the cluster index each pixel belongs to
     cluster_areas: Vec<Area>,  // uniquely sorted array of cluster sizes
     clusters_output: Vec<ClusterIndex>, // indices of good clusters
     stage: u32,
@@ -398,7 +398,6 @@ impl BuilderImpl {
 
         for index in 0..self.clusters.len() {
 
-            let view = self.view();
             let index = ClusterIndex(index as ClusterIndexElem);
             let mycluster = self.get_cluster(index);
 
@@ -413,7 +412,7 @@ impl BuilderImpl {
 
             let mycolor = mycluster.color();
             let mut infos: Vec<_> = mycluster
-                .neighbours(&view)
+                .neighbours_self_ref(&self)
                 .iter()
                 .map(|other| NeighbourInfo {
                     index: *other,
@@ -433,14 +432,12 @@ impl BuilderImpl {
 
             let target = infos[0].index;
 
-            let view = self.view();
-
             let deepen = if self.hierarchical == HIERARCHICAL_MAX {
-                (self.deepen)(&view, &self.get_cluster(index), &infos)
+                (self.deepen)(&self, &self.get_cluster(index), &infos)
             } else {
                 false
             };
-            let hollow = (self.hollow)(&view, &self.get_cluster(index), &infos);
+            let hollow = (self.hollow)(&infos);
 
             if deepen {
                 self.clusters_output.push(index);

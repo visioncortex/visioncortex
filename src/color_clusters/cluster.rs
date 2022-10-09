@@ -3,6 +3,7 @@ use crate::{BinaryImage, BoundingRect, Color, ColorImage, ColorSum, CompoundPath
 use crate::clusters::Cluster as BinaryCluster;
 use super::container::{ClusterIndex, ClustersView};
 use super::builder::ZERO;
+use super::builder::BuilderImpl;
 
 #[derive(Clone, Default)]
 pub struct Cluster {
@@ -42,13 +43,22 @@ impl Cluster {
     pub fn residue_color(&self) -> Color {
         self.residue_sum.average()
     }
-
+    
     pub fn perimeter(&self, parent: &ClustersView) -> u32 {
         Shape::image_boundary_list(&self.to_image(parent)).len() as u32
     }
 
+    pub(crate) fn perimeter_self_ref(&self, self_ref: &BuilderImpl) -> u32 {
+        Shape::image_boundary_list(&self.to_image_self_ref(self_ref)).len() as u32
+    }
+
     pub fn to_image(&self, parent: &ClustersView) -> BinaryImage {
         self.to_image_with_hole(parent, true)
+    }
+    //Change the argument for to_image from ClusterView to a reference of BuilderImpl to improve 
+    //the speed
+    fn to_image_self_ref(&self, self_ref: &BuilderImpl) -> BinaryImage {
+        self.to_image_with_hole_self_ref(self_ref, true)
     }
 
     pub fn to_image_with_hole(&self, parent: &ClustersView, hole: bool) -> BinaryImage {
@@ -66,6 +76,29 @@ impl Cluster {
             for &i in self.holes.iter() {
                 let x = (i as i32 % parent.width as i32) - self.rect.left;
                 let y = (i as i32 / parent.width as i32) - self.rect.top;
+                image.set_pixel(x as usize, y as usize, false);
+            }
+        }
+
+        image
+    }
+    //Change the argument of to_image_with_hole function from ClusterView to a reference of 
+    //BuilderImpl to improve the speed
+    fn to_image_with_hole_self_ref(&self, self_ref: &BuilderImpl, hole: bool) -> BinaryImage {
+        let width = self.rect.width() as usize;
+        let height = self.rect.height() as usize;
+        let mut image = BinaryImage::new_w_h(width, height);
+
+        for &i in self.iter() {
+            let x = (i as i32 % self_ref.width as i32) - self.rect.left;
+            let y = (i as i32 / self_ref.width as i32) - self.rect.top;
+            image.set_pixel(x as usize, y as usize, true);
+        }
+
+        if hole {
+            for &i in self.holes.iter() {
+                let x = (i as i32 % self_ref.width as i32) - self.rect.left;
+                let y = (i as i32 / self_ref.width as i32) - self.rect.top;
                 image.set_pixel(x as usize, y as usize, false);
             }
         }
@@ -135,6 +168,33 @@ impl Cluster {
                     1 => if y < parent.height - 1 { parent.cluster_indices[(parent.width * (y + 1) + x) as usize] } else { ZERO },
                     2 => if x > 0 { parent.cluster_indices[(parent.width * y + (x - 1)) as usize] } else { ZERO },
                     3 => if x < parent.width - 1 { parent.cluster_indices[(parent.width * y + (x + 1)) as usize] } else { ZERO },
+                    _ => unreachable!(),
+                };
+                if index != ZERO && index != myself {
+                    neighbours.insert(index);
+                }
+            }
+        }
+
+        let mut list: Vec<ClusterIndex> = neighbours.into_iter().collect();
+        list.sort();
+        list
+    }
+
+    pub(crate) fn neighbours_self_ref(&self, self_ref: &BuilderImpl) -> Vec<ClusterIndex> {
+        let myself = self_ref.cluster_indices[*self.indices.first().unwrap() as usize];
+        let mut neighbours = HashSet::new();
+
+        for &i in self.iter() {
+            let x = i % self_ref.width;
+            let y = i / self_ref.width;
+
+            for k in 0..4 {
+                let index = match k {
+                    0 => if y > 0 { self_ref.cluster_indices[(self_ref.width * (y - 1) + x) as usize] } else { ZERO },
+                    1 => if y < self_ref.height - 1 { self_ref.cluster_indices[(self_ref.width * (y + 1) + x) as usize] } else { ZERO },
+                    2 => if x > 0 { self_ref.cluster_indices[(self_ref.width * y + (x - 1)) as usize] } else { ZERO },
+                    3 => if x < self_ref.width - 1 { self_ref.cluster_indices[(self_ref.width * y + (x + 1)) as usize] } else { ZERO },
                     _ => unreachable!(),
                 };
                 if index != ZERO && index != myself {
