@@ -4,7 +4,7 @@ use flo_curves::{Coord2, bezier, BezierCurveFactory};
 /// Handles Path Smoothing
 pub(crate) struct SubdivideSmooth;
 
-use super::util::{angle, find_intersection, find_mid_point, norm, normalize, signed_angle_difference};
+use super::util::{angle, try_find_intersection, find_mid_point, norm, normalize, signed_angle_difference};
 
 impl SubdivideSmooth {
 
@@ -226,10 +226,10 @@ impl SubdivideSmooth {
 
         // They intersect
         if dab.is_sign_positive() != abc.is_sign_positive() {
-            let intersection = find_intersection(a, b, c, d);
-            [*a, intersection, intersection, *d]
-        } else {
-            [*a, *b, *c, *d]
+            if let Some(intersection) = try_find_intersection(a, b, c, d) {
+                return [*a, intersection, intersection, *d];
+            }
         }
+        [*a, *b, *c, *d]
     }
 }
