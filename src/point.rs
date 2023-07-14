@@ -399,6 +399,7 @@ mod tests {
         assert_eq!(p.to_svg_string(None), "1.21786434,2.98252586");
     }
 
+    #[test]
     /// rotate clockwise by 90 degrees
     fn pointi32_rotate() {
         let p = PointI32 { x: 1, y: 0 };
