@@ -1,12 +1,12 @@
 use crate::{PathI32, PathF64, PointF64, Spline};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A collection of `Path` and `Spline` that represents a shape with holes
 pub struct CompoundPath {
     pub paths: Vec<CompoundPathElement>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// An element of a `CompoundPath`
 pub enum CompoundPathElement {
     PathI32(PathI32),
