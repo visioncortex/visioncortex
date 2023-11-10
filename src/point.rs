@@ -9,6 +9,18 @@ pub struct Point2<T> {
     pub y: T,
 }
 
+pub trait PointType: Default + Copy {
+    fn from<P: PointType>(p: &P) -> Self;
+
+    fn to<T: PointType>(&self) -> T {
+        T::from(self)
+    }
+
+    fn to_point_f64(&self) -> PointF64;
+
+    fn to_point_i32(&self) -> PointI32;
+}
+
 pub trait ToSvgString {
     fn to_svg_string(&self, precision: Option<u32>) -> String;
 }
@@ -351,6 +363,38 @@ impl PointF64 {
 
     pub fn to_point_f32(&self) -> PointF32 {
         PointF32 { x: self.x as f32, y: self.y as f32 }
+    }
+}
+
+impl PointType for PointI32 {
+    fn from<P: PointType>(p: &P) -> Self {
+        p.to_point_i32()
+    }
+
+    #[inline]
+    fn to_point_f64(&self) -> PointF64 {
+        self.to_point_f64()
+    }
+
+    #[inline]
+    fn to_point_i32(&self) -> PointI32 {
+        *self
+    }
+}
+
+impl PointType for PointF64 {
+    fn from<P: PointType>(p: &P) -> Self {
+        p.to_point_f64()
+    }
+
+    #[inline]
+    fn to_point_f64(&self) -> PointF64 {
+        *self
+    }
+
+    #[inline]
+    fn to_point_i32(&self) -> PointI32 {
+        self.to_point_i32()
     }
 }
 

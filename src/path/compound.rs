@@ -1,4 +1,4 @@
-use crate::{PathI32, PathF64, PointF64, Spline};
+use crate::{PathI32, PathF64, PointF64, PointType, Spline};
 
 #[derive(Debug, Clone)]
 /// A collection of `Path` and `Spline` that represents a shape with holes
@@ -53,22 +53,23 @@ impl CompoundPath {
     }
 
     /// returns a single svg path string in relative path syntax and offset
-    pub fn to_svg_string(&self, close: bool, offset: PointF64, precision: Option<u32>) -> (String, PointF64) {
+    pub fn to_svg_string<P>(&self, close: bool, offset: P, precision: Option<u32>) -> (String, P)
+        where P: PointType + std::ops::Sub<Output = P> {
         let origin = if !self.paths.is_empty() {
             match &self.paths[0] {
-                CompoundPathElement::PathI32(p) => -p.path[0].to_point_f64(),
-                CompoundPathElement::PathF64(p) => -p.path[0],
-                CompoundPathElement::Spline(p) => -p.points[0],
+                CompoundPathElement::PathI32(p) => P::default() - p.path[0].to::<P>(),
+                CompoundPathElement::PathF64(p) => P::default() - p.path[0].to::<P>(),
+                CompoundPathElement::Spline(p) => P::default() - p.points[0].to::<P>(),
             }
         } else {
-            PointF64::default()
+            P::default()
         };
 
         let string = self.paths.iter().map(|p| {
             match p {
                 CompoundPathElement::PathI32(p) => p.to_svg_string(close, &origin.to_point_i32(), precision),
-                CompoundPathElement::PathF64(p) => p.to_svg_string(close, &origin, precision),
-                CompoundPathElement::Spline(p) => p.to_svg_string(close, &origin, precision),
+                CompoundPathElement::PathF64(p) => p.to_svg_string(close, &origin.to_point_f64(), precision),
+                CompoundPathElement::Spline(p) => p.to_svg_string(close, &origin.to_point_f64(), precision),
             }
         }).collect::<String>();
 
