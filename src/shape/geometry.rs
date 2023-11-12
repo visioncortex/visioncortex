@@ -128,8 +128,16 @@ impl Shape {
         if self.image.width <= 4 && self.image.height <= 4 {
             return false;
         }
-        let threshold = std::cmp::min(self.image.width, self.image.height);
-        let threshold = (threshold * threshold) / 4;
+        let corners = 
+            self.image.get_pixel(0, 0) as i32 +
+            self.image.get_pixel(self.image.width - 1, 0) as i32 +
+            self.image.get_pixel(self.image.width - 1, self.image.height - 1) as i32 +
+            self.image.get_pixel(0, self.image.height - 1) as i32;
+        if corners > 1 {
+            return false;
+        }
+        let area = self.image.width * self.image.height;
+        let threshold = area / 2;
         let diff = self.image.diff(&Self::ellipse(self.image.width, self.image.height).image);
         Self::clustered_diff(&diff, threshold)
     }
@@ -250,7 +258,25 @@ mod tests {
     }
 
     #[test]
-    fn shape_is_not_circle() {
+    fn shape_is_not_circle_0() {
+        assert!(!Shape::from(BinaryImage::from_string(&(
+            "*\n".to_owned()
+        ))).is_circle());
+
+        assert!(!Shape::from(BinaryImage::from_string(&(
+            "**\n".to_owned() +
+            "**\n"
+        ))).is_circle());
+
+        assert!(!Shape::from(BinaryImage::from_string(&(
+            "***\n".to_owned() +
+            "***\n" +
+            "***\n"
+        ))).is_circle());
+    }
+
+    #[test]
+    fn shape_is_not_circle_1() {
         assert!(!Shape::from(BinaryImage::from_string(&(
             "*******\n".to_owned() +
             "*******\n" +

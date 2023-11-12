@@ -92,18 +92,32 @@ impl BoundingRect {
         }
     }
 
+    #[inline]
+    pub fn left_top(&self) -> PointI32 {
+        PointI32::new(self.left, self.top)
+    }
+
+    #[inline]
     pub fn top_left(&self) -> PointI32 {
         PointI32::new(self.left, self.top)
     }
 
+    #[inline]
     pub fn top_right(&self) -> PointI32 {
         PointI32::new(self.right, self.top)
     }
 
+    #[inline]
     pub fn bottom_left(&self) -> PointI32 {
         PointI32::new(self.left, self.bottom)
     }
 
+    #[inline]
+    pub fn right_bottom(&self) -> PointI32 {
+        PointI32::new(self.right, self.bottom)
+    }
+
+    #[inline]
     pub fn bottom_right(&self) -> PointI32 {
         PointI32::new(self.right, self.bottom)
     }

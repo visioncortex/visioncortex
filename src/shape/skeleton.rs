@@ -13,7 +13,6 @@ impl Shape {
 }
 
 impl BinaryImage {
-
     /// An extremely fast implementation of skeletonization
     #[allow(clippy::many_single_char_names)]
     pub fn to_skeleton(&self) -> Skeleton {
