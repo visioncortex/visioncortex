@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Write};
+
 /// Matrix operations adapted from https://github.com/sloisel/numeric
 #[derive(Clone)]
 pub struct Matrix<const I: usize, const J: usize> {
@@ -20,19 +22,7 @@ impl<const I: usize, const J: usize> Matrix<I, J> {
     pub fn dim(&self) -> [usize; 2] {
         return [I, J];
     }
-}
 
-impl<const I: usize> Matrix<I, I> {
-    pub fn identity() -> Self {
-        let mut m = Matrix::default();
-        for i in 0..I {
-            m.m[i][i] = 1.0;
-        }
-        m
-    }
-}
-
-impl<const I: usize, const J: usize> Matrix<I, J> {
     pub fn transpose(&self) -> Matrix<J, I> {
         let x = &self;
         let mut m = Matrix::default();
@@ -47,6 +37,14 @@ impl<const I: usize, const J: usize> Matrix<I, J> {
 
 /// Only for square matrix
 impl<const I: usize> Matrix<I, I> {
+    pub fn identity() -> Self {
+        let mut m = Matrix::default();
+        for i in 0..I {
+            m.m[i][i] = 1.0;
+        }
+        m
+    }
+
     pub fn inv(&self) -> Option<Self> {
         let mut mx = self.clone();
         let mx = &mut mx.m;
@@ -142,5 +140,83 @@ impl<const I: usize, const J: usize> Matrix<I, J> {
             ret += x[0]*y[0];
         }
         ret
+    }
+
+    pub fn eq(&self, y: &Self, epsilon: f64) -> bool {
+        let x = &self.m;
+        let y = &y.m;
+        for i in 0..I {
+            for j in 0..J {
+                if (x[i][j] - y[i][j]).abs() > epsilon {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    pub fn scale(&mut self, s: f64) {
+        let x = &mut self.m;
+        for i in 0..I {
+            for j in 0..J {
+                x[i][j] *= s;
+            }
+        }
+    }
+}
+
+impl<const I: usize, const J: usize> Debug for Matrix<I, J> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, "Matrix([")?;
+        for i in 0..I {
+            writeln!(f, "    {:?},", self.m[i])?;
+        }
+        write!(f, "])")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_matrix_display() {
+        assert_eq!(
+            &format!("{:?}", Matrix::<3, 3>::identity()),
+            r#"Matrix([
+    [1.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
+])"#
+        );
+    }
+
+    #[test]
+    fn test_matrix_inverse() {
+        let m1 = Matrix::new([
+            [1., 0., 0.],
+            [3., 5., 0.],
+            [2., 1., 8.],
+        ]);
+        let mut m2 = Matrix::new([
+            [40.,  0., 0.],
+            [-24., 8., 0.],
+            [-7., -1., 5.],
+        ]);
+        m2.scale(1./40.);
+        assert!(m1.inv().unwrap().eq(&m2, 1e-7));
+
+        let m1 = Matrix::new([
+            [2., 0., 5.],
+            [3., 1., 3.],
+            [9., 5., 9.],
+        ]);
+        let mut m2 = Matrix::new([
+            [-6.,  25., -5.],
+            [ 0., -27.,  9.],
+            [ 6., -10.,  2.],
+        ]);
+        m2.scale(1./18.);
+        assert!(m1.inv().unwrap().eq(&m2, 1e-7));
     }
 }
