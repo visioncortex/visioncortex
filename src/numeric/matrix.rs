@@ -1,57 +1,61 @@
 /// Matrix operations adapted from https://github.com/sloisel/numeric
-pub struct Numeric;
+#[derive(Clone)]
+pub struct Matrix<const I: usize, const J: usize> {
+    pub m: [[f64; J]; I],
+}
 
-pub type Matrix = Vec<Vec<f64>>;
-
-impl Numeric {
-
-    pub fn dim(x: &Matrix) -> Vec<usize> {
-        return vec![x.len(), x[0].len()];
-    }
-
-    pub fn clone(x: &Matrix) -> Matrix {
-        let mut yy = Vec::new();
-        for xx in x.iter() {
-            yy.push(xx.clone());
+impl<const I: usize, const J: usize> Default for Matrix<I, J> {
+    fn default() -> Self {
+        Self {
+            m: [[0.; J]; I],
         }
-        yy
+    }
+}
+
+impl<const I: usize, const J: usize> Matrix<I, J> {
+    pub fn new(m: [[f64; J]; I]) -> Self {
+        Self { m }
     }
 
-    pub fn identity(n: usize) -> Matrix {
-        let mut x = Vec::new();
-        for i in 0..n {
-            let mut yy = Vec::new();
-            for j in 0..n {
-                yy.push(if i == j {1.0} else {0.0});
+    pub fn dim(&self) -> [usize; 2] {
+        return [I, J];
+    }
+}
+
+impl<const I: usize> Matrix<I, I> {
+    pub fn identity() -> Self {
+        let mut m = Matrix::default();
+        for i in 0..I {
+            m.m[i][i] = 1.0;
+        }
+        m
+    }
+}
+
+impl<const I: usize, const J: usize> Matrix<I, J> {
+    pub fn transpose(&self) -> Matrix<J, I> {
+        let x = &self;
+        let mut m = Matrix::default();
+        for i in 0..I {
+            for j in 0..J {
+                m.m[j][i] = self.m[i][j];
             }
-            x.push(yy);
         }
-        x
+        m
     }
+}
 
-    pub fn transpose(x: &Matrix) -> Matrix {
-        let mut yy = Vec::new();
-        for _j in 0..x[0].len() {
-            yy.push(Vec::new());
-        }
-        for j in 0..x[0].len() {
-            for i in 0..x.len() {
-                yy[j].push(x[i][j]);
-            }
-        }
-        yy
-    }
-
-    pub fn inv(mx: &Matrix) -> Option<Matrix> {
-        let dim = Self::dim(mx);
-        let m = dim[0];
-        let n = dim[1];
-        let mut mx = Self::clone(mx);
-        let mut ii = Self::identity(m);
-        for j in 0..n {
+/// Only for square matrix
+impl<const I: usize> Matrix<I, I> {
+    pub fn inv(&self) -> Option<Self> {
+        let mut mx = self.clone();
+        let mx = &mut mx.m;
+        let mut ret = Self::identity();
+        let ii = &mut ret.m;
+        for j in 0..I {
             let mut i0 = 0;
             let mut v0 = -1.0;
-            for i in j..m {
+            for i in j..I {
                 let k = (mx[i][j]).abs();
                 if k > v0 {
                     i0 = i;
@@ -64,19 +68,19 @@ impl Numeric {
             if x == 0.0 {
                 return None;
             }
-            for k in j..n {
+            for k in j..I {
                 mx[j][k] /= x; 
             }
-            for k in (0..n).rev() {
+            for k in (0..I).rev() {
                 ii[j][k] /= x;
             }
-            for i in (0..m).rev() {
+            for i in (0..I).rev() {
                 if i != j {
                     let x = mx[i][j];
-                    for k in j+1..n {
+                    for k in j+1..I {
                         mx[i][k] -= mx[j][k]*x;
                     }
-                    let mut k = n as i32 - 1;
+                    let mut k = I as i32 - 1;
                     while k > 0 {
                         ii[i][k as usize] -= ii[j][k as usize]*x;
                         k -= 1;
@@ -89,18 +93,20 @@ impl Numeric {
                 }
             }
         }
-        Some(ii)
+        Some(ret)
     }
+}
 
-    pub fn dot_mm_small(x: &Matrix, y: &Matrix) -> Matrix {
-        let p = x.len(); let q = y.len(); let r = y[0].len();
-        let mut ret = vec![Vec::new(); p];
-        for i in (0..p).rev() {
-            let mut foo = vec![0.0; r];
-            let bar = &x[i];
-            for k in (0..r).rev() {
-                let mut woo = bar[q-1]*y[q-1][k];
-                let mut j = q as i32 - 2;
+impl<const I: usize, const J: usize> Matrix<I, J> {
+    pub fn dot_mm_small<const K: usize>(&self, y: &Matrix<J, K>) -> Matrix<I, K> {
+        let y = &y.m;
+        let mut ret = Matrix::default();
+        for i in (0..I).rev() {
+            let mut foo = [0.0; K];
+            let bar = &self.m[i];
+            for k in (0..K).rev() {
+                let mut woo = bar[J-1]*y[J-1][k];
+                let mut j = J as i32 - 2;
                 while j >= 1 {
                     let i0 = j-1;
                     woo += bar[j as usize]*y[j as usize][k] + bar[i0 as usize]*y[i0 as usize][k];
@@ -111,24 +117,22 @@ impl Numeric {
                 }
                 foo[k] = woo;
             }
-            ret[i] = foo;
+            ret.m[i] = foo;
         }
         ret
     }
 
-    pub fn dot_mv(x: &Matrix, y: &[f64]) -> Vec<f64> {
-        let p = x.len();
-        let mut ret = vec![0.0; p];
-        for i in (0..p).rev() {
-            ret[i] = Self::dot_vv(&x[i], y);
+    pub fn dot_mv(&self, y: &[f64; J]) -> [f64; I] {
+        let mut ret = [0.0; I];
+        for i in (0..I).rev() {
+            ret[i] = Self::dot_vv(&self.m[i], y);
         }
         ret
     }
 
-    pub fn dot_vv(x: &[f64], y: &[f64]) -> f64 {
-        let n = x.len();
-        let mut ret = x[n-1]*y[n-1];
-        let mut i = n as i32 - 2;
+    pub fn dot_vv<const K: usize>(x: &[f64; K], y: &[f64; K]) -> f64 {
+        let mut ret = x[K-1]*y[K-1];
+        let mut i = K as i32 - 2;
         while i >= 1 {
             let i1 = i-1;
             ret += x[i as usize]*y[i as usize] + x[i1 as usize]*y[i1 as usize];
