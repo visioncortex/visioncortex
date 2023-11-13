@@ -1,4 +1,4 @@
-use crate::{CompoundPath, PointF64, PointI32, Spline};
+use crate::{PointF64, PointI32, Spline};
 use std::cmp::Ordering;
 
 /// Thanks https://spencermortensen.com/articles/bezier-circle/ for the magic constants
@@ -54,7 +54,7 @@ pub fn circular_arc(p_0: PointI32, ap: PointI32, p_3: PointI32) -> Spline {
     }
 }
 
-pub fn approximate_circle_with_arc(left_top: PointI32, diameter: i32) -> CompoundPath {
+pub fn approximate_circle_with_spline(left_top: PointI32, diameter: i32) -> Spline {
     let r = diameter / 2;
     let mut a = left_top;
     a.x += r;
@@ -72,9 +72,7 @@ pub fn approximate_circle_with_arc(left_top: PointI32, diameter: i32) -> Compoun
     b = left_top;
     a.y = left_top.y;
     spline.points.extend(&circular_arc(c, b, a).points[1..]);
-    let mut paths = CompoundPath::new();
-    paths.add_spline(spline);
-    paths
+    spline
 }
 
 #[inline]
