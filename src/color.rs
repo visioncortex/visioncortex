@@ -205,6 +205,10 @@ impl ColorI32 {
         assert!(0 <= self.b && self.b < 256);
         Color::new(self.r as u8, self.g as u8, self.b as u8)
     }
+
+    pub fn absolute(&self) -> i32 {
+        self.r.abs().max(self.g.abs().max(self.b.abs()))
+    }
 }
 
 impl ColorF64 {

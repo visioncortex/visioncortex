@@ -182,6 +182,22 @@ impl Shape {
         let threshold = self.image.width * self.image.height / 6;
         Self::clustered_diff(&diff, threshold)
     }
+
+    pub fn is_isosceles_triangle(&self) -> bool {
+        if self.image.width < 3 && self.image.height < 3 {
+            return false;
+        }
+        let area = self.image.width * self.image.height;
+        let threshold = area / 3;
+        let mut reference = BinaryImage::new_w_h(self.image.width, self.image.height);
+        rasterize_triangle(&[
+            PointI32::new(0, self.image.height as i32),
+            PointI32::new(self.image.width as i32 / 2, 0),
+            PointI32::new(self.image.width as i32, self.image.height as i32),
+        ], &mut reference);
+        let diff = self.image.diff(&reference);
+        Self::clustered_diff(&diff, threshold)
+    }
 }
 
 impl From<BinaryImage> for Shape {
@@ -370,5 +386,36 @@ mod tests {
             "--*****--\n" +
             "----*----\n"
         ))).is_quadrilateral());
+    }
+
+    #[test]
+    fn shape_is_isosceles_triangle() {
+        assert!(!Shape::from(BinaryImage::from_string(&(
+            "***\n".to_owned() +
+            "***\n" +
+            "***\n"
+        ))).is_isosceles_triangle());
+        assert!(Shape::from(BinaryImage::from_string(&(
+            "-*-\n".to_owned() +
+            "***\n" +
+            "***\n"
+        ))).is_isosceles_triangle());
+        let shape = Shape::from(BinaryImage::from_string(&(
+            "--*--\n".to_owned() +
+            "-***-\n" +
+            "-***-\n" +
+            "*****\n"
+        )));
+        assert!(shape.is_isosceles_triangle());
+        assert!(!shape.is_circle());
+        let shape = Shape::from(BinaryImage::from_string(&(
+            "-***-\n".to_owned() +
+            "-***-\n" +
+            "*****\n" +
+            "*****\n"
+        )));
+        assert!(!shape.is_isosceles_triangle());
+        assert!(!shape.is_circle());
+        assert!(!shape.is_quadrilateral());
     }
 }
