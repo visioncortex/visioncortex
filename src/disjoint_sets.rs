@@ -160,7 +160,7 @@ where
         use std::collections::HashSet;
         let mut roots = HashSet::new();
         
-        for i in 0..self.parents.len() as u32 {
+        for i in 0..self.parents.len() as Label {
             let root = self.find_and_compress_path(i);
             roots.insert(root);
         }
