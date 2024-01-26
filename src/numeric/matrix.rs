@@ -96,6 +96,7 @@ impl<const I: usize> Matrix<I, I> {
 }
 
 impl<const I: usize, const J: usize> Matrix<I, J> {
+    /// Multiply two matrices
     pub fn dot_mm_small<const K: usize>(&self, y: &Matrix<J, K>) -> Matrix<I, K> {
         let y = &y.m;
         let mut ret = Matrix::default();
@@ -120,6 +121,7 @@ impl<const I: usize, const J: usize> Matrix<I, J> {
         ret
     }
 
+    /// Multiply a matrix to a vector
     pub fn dot_mv(&self, y: &[f64; J]) -> [f64; I] {
         let mut ret = [0.0; I];
         for i in (0..I).rev() {

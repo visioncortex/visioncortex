@@ -61,7 +61,7 @@ where
 ///
 /// The testing function should define a equivalence relation `~` on the set of elements
 /// and return true for elements `a` and `b` if-and-only-if `a ~ b`.
-/// This implies that the function is commutative, i.e. `should_group(a, b) == should_group(b, a`).
+/// This implies that the function is commutative, i.e. `should_group(a, b) == should_group(b, a).
 ///
 /// # Example
 /// ```
