@@ -1,7 +1,7 @@
 mod geometry;
 mod image_operations;
 mod processor;
-mod rasterizer;
+pub mod rasterizer;
 mod skeleton;
 mod arc;
 
