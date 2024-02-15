@@ -122,7 +122,13 @@ where
     groups
 }
 
-pub type Label = u32;
+#[derive(Debug, Hash, Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Label(u32);
+
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Rank(u8);
 
 /// Data structure for building disjoint sets
 pub struct Forests<T>
@@ -130,7 +136,7 @@ where
     T: Eq + Hash,
 {
     parents: Vec<Label>,
-    ranks: Vec<u8>,
+    ranks: Vec<Rank>,
     labels: HashMap<T, Label>,
 }
 
@@ -160,8 +166,8 @@ where
         use std::collections::HashSet;
         let mut roots = HashSet::new();
         
-        for i in 0..self.parents.len() as Label {
-            let root = self.find_and_compress_path(i);
+        for i in 0..self.parents.len() {
+            let root = self.find_and_compress_path(Label::from(i));
             roots.insert(root);
         }
 
@@ -198,10 +204,10 @@ where
         }
 
         // The new label of `item` should be the next available index.
-        let label = self.ranks.len() as Label;
+        let label = Label::from(self.ranks.len());
         self.labels.insert(item, label);
         self.parents.push(label); // parent points to item itself
-        self.ranks.push(0);
+        self.ranks.push(Rank::zero());
     }
 
     /// Find the label of the set `item` belongs to.
@@ -216,7 +222,7 @@ where
 
         loop {
             // traverse towards parent until parent == itself
-            let parent = self.parents[cur as usize];
+            let parent = self.parents[cur.as_usize()];
             if parent == cur {
                 break;
             }
@@ -226,7 +232,7 @@ where
 
         // compress path
         for visited in path_visited {
-            self.parents[visited as usize] = cur;
+            self.parents[visited.as_usize()] = cur;
         }
 
         cur
@@ -242,15 +248,41 @@ where
 
     /// Implements union by rank.
     fn link(&mut self, x: Label, y: Label) {
-        match self.ranks[x as usize].cmp(&self.ranks[y as usize]) {
-            std::cmp::Ordering::Greater => self.parents[y as usize] = x,
-            std::cmp::Ordering::Less => self.parents[x as usize] = y,
+        match self.ranks[x.as_usize()].cmp(&self.ranks[y.as_usize()]) {
+            std::cmp::Ordering::Greater => self.parents[y.as_usize()] = x,
+            std::cmp::Ordering::Less => self.parents[x.as_usize()] = y,
             std::cmp::Ordering::Equal => {
                 // break ties arbitrarily
-                self.parents[x as usize] = y;
-                self.ranks[y as usize] += 1;
+                self.parents[x.as_usize()] = y;
+                self.ranks[y.as_usize()].inc();
             }
         }
+    }
+}
+
+impl Label {
+    fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl Rank {
+    pub const fn zero() -> Self {
+        Self(0)
+    }
+
+    fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+
+    fn inc(&mut self) {
+        self.0 += 1;
+    }
+}
+
+impl From<usize> for Label {
+    fn from(i: usize) -> Self {
+        Self(i as u32)
     }
 }
 
