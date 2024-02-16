@@ -20,7 +20,7 @@ pub struct BoundingRect {
     pub bottom: i32,
 }
 
-#[derive(Copy, Clone, PartialEq, Default, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct BoundingRectF64 {
     pub left_top: PointF64,
     pub right_bottom: PointF64,
@@ -339,13 +339,25 @@ impl BoundingRect {
     }
 }
 
+impl Default for BoundingRectF64 {
+    fn default() -> Self {
+        Self {
+            left_top: PointF64::new(f64::MAX, f64::MAX),
+            right_bottom: PointF64::new(f64::MIN, f64::MIN),
+        }
+    }
+}
+
 impl BoundingRectF64 {
     pub fn new(left_top: PointF64, right_bottom: PointF64) -> Self {
         Self { left_top, right_bottom }
     }
 
     pub fn is_empty(self) -> bool {
-        self.left_top == self.right_bottom
+        self.left_top.x == f64::MAX &&
+        self.left_top.y == f64::MAX &&
+        self.right_bottom.x == f64::MIN &&
+        self.right_bottom.y == f64::MIN
     }
 
     pub fn width(self) -> f64 {
@@ -369,6 +381,13 @@ impl BoundingRectF64 {
         self.left_top.y = self.left_top.y.min(other.left_top.y);
         self.right_bottom.x = self.right_bottom.x.max(other.right_bottom.x);
         self.right_bottom.y = self.right_bottom.y.max(other.right_bottom.y);
+    }
+
+    pub fn add_point(&mut self, p: PointF64) {
+        self.left_top.x = self.left_top.x.min(p.x);
+        self.left_top.y = self.left_top.y.min(p.y);
+        self.right_bottom.x = self.right_bottom.x.max(p.x);
+        self.right_bottom.y = self.right_bottom.y.max(p.y);
     }
 
     pub fn to_rect(&self) -> BoundingRect {
