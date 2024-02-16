@@ -21,7 +21,7 @@ pub use numeric::*;
 pub use path::*;
 pub use shape::*;
 pub use artifact::*;
-pub use bound::{Bound, BoundingRect, BoundStat};
+pub use bound::{Bound, BoundingRect, BoundingRectF64, BoundStat};
 //pub use clusters;
 pub use color::*;
 pub use color_stat::*;

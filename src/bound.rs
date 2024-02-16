@@ -1,7 +1,7 @@
 //! Functions to compute and manipulate bounding rectangles
 
 use std::cmp::min;
-use crate::{PointI32, disjoint_sets};
+use crate::{PointI32, PointF64, disjoint_sets};
 
 /// Any object that has a bounding rect
 pub trait Bound {
@@ -18,6 +18,12 @@ pub struct BoundingRect {
     pub top: i32,
     pub right: i32,
     pub bottom: i32,
+}
+
+#[derive(Copy, Clone, PartialEq, Default, Debug)]
+pub struct BoundingRectF64 {
+    pub left_top: PointF64,
+    pub right_bottom: PointF64,
 }
 
 /// Statistics over a collection of objects with `Bound` trait
@@ -333,9 +339,57 @@ impl BoundingRect {
     }
 }
 
+impl BoundingRectF64 {
+    pub fn new(left_top: PointF64, right_bottom: PointF64) -> Self {
+        Self { left_top, right_bottom }
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.left_top == self.right_bottom
+    }
+
+    pub fn width(self) -> f64 {
+        self.right_bottom.x - self.left_top.x
+    }
+
+    pub fn height(self) -> f64 {
+        self.right_bottom.y - self.left_top.y
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        if other.is_empty() {
+            return;
+        }
+        if self.is_empty() {
+            self.left_top = other.left_top;
+            self.right_bottom = other.right_bottom;
+            return;
+        }
+        self.left_top.x = self.left_top.x.min(other.left_top.x);
+        self.left_top.y = self.left_top.y.min(other.left_top.y);
+        self.right_bottom.x = self.right_bottom.x.max(other.right_bottom.x);
+        self.right_bottom.y = self.right_bottom.y.max(other.right_bottom.y);
+    }
+
+    pub fn to_rect(&self) -> BoundingRect {
+        BoundingRect {
+            left: self.left_top.x.floor() as i32,
+            top: self.left_top.y.floor() as i32,
+            right: self.right_bottom.x.ceil() as i32,
+            bottom: self.right_bottom.y.ceil() as i32,
+        }
+    }
+}
+
 impl Bound for BoundingRect {
     fn bound(&self) -> BoundingRect {
         *self
+    }
+}
+
+impl Bound for BoundingRectF64 {
+    fn bound(&self) -> BoundingRect {
+        self.to_rect()
     }
 }
 
