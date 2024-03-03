@@ -2,7 +2,7 @@
 name = "visioncortex"
 version = "0.8.6"
 authors = ["Chris Tsang <tyt2y7@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "Semantic Computer Vision"
 license = "MIT OR Apache-2.0"
 homepage = "http://www.visioncortex.org/"
