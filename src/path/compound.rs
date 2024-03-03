@@ -1,4 +1,4 @@
-use crate::{PathI32, PathF64, PointF64, PointType, Spline};
+use crate::{PathI32, PathF64, PointType, Spline};
 
 #[derive(Debug, Clone)]
 /// A collection of `Path` and `Spline` that represents a shape with holes
@@ -123,7 +123,7 @@ impl CompoundPath {
 
 #[cfg(test)]
 mod tests {
-    use crate::PointI32;
+    use crate::{PointI32, PointF64};
     use super::*;
 
     #[test]

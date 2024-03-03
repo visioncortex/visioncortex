@@ -128,7 +128,7 @@ pub struct Label(u32);
 
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct Rank(u8);
+struct Rank(u8);
 
 /// Data structure for building disjoint sets
 pub struct Forests<T>
@@ -269,10 +269,6 @@ impl Label {
 impl Rank {
     pub const fn zero() -> Self {
         Self(0)
-    }
-
-    fn as_usize(&self) -> usize {
-        self.0 as usize
     }
 
     fn inc(&mut self) {

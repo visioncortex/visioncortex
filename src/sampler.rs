@@ -149,6 +149,7 @@ impl Sampler {
     }
 }
 
+#[allow(dead_code)]
 fn is_pow_of_four(n: usize) -> bool {
     (1 << (2 * pow_of_four(n))) == n
 }

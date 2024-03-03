@@ -7,8 +7,6 @@ use super::Matrix;
 ///
 /// Adapted from https://github.com/jlouthan/perspective-transform
 pub struct PerspectiveTransform {
-    src_pts: [f64; 8],
-    dst_pts: [f64; 8],
     coeffs: [f64; 8],
     coeffs_inv: [f64; 8],
 }
@@ -38,8 +36,6 @@ impl PerspectiveTransform {
         let coeffs = Self::get_normalization_coefficients(&src_pts, &dst_pts, false);
         let coeffs_inv = Self::get_normalization_coefficients(&src_pts, &dst_pts, true);
         PerspectiveTransform {
-            src_pts,
-            dst_pts,
             coeffs,
             coeffs_inv,
         }
@@ -47,8 +43,6 @@ impl PerspectiveTransform {
 
     pub fn default() -> PerspectiveTransform {
         PerspectiveTransform {
-            src_pts: Default::default(),
-            dst_pts: Default::default(),
             coeffs: Default::default(),
             coeffs_inv: Default::default(),
         }

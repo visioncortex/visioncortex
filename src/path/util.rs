@@ -9,14 +9,9 @@ pub(super) fn signed_area(p1: PointI32, p2: PointI32, p3: PointI32) -> i32 {
 
 /// Given lines p1p2 and p3p4, returns their intersection.
 /// If the two lines coincide, returns the mid-pt of p2 and p3.
-/// If the two lines are parallel, panicks.
+/// If the two lines are parallel, return None.
 /// https://github.com/tyt2y3/vaser-unity/blob/master/Assets/Vaser/Vec2Ext.cs#L107 (Intersect)
-#[inline]
-pub(super) fn find_intersection(p1: &PointF64, p2: &PointF64, p3: &PointF64, p4: &PointF64) -> PointF64 {
-    try_find_intersection(p1, p2, p3, p4).expect("The two lines are parallel!")
-}
-
-pub(super) fn try_find_intersection(p1: &PointF64, p2: &PointF64, p3: &PointF64, p4: &PointF64) -> Option<PointF64> {
+pub(super) fn find_intersection(p1: &PointF64, p2: &PointF64, p3: &PointF64, p4: &PointF64) -> Option<PointF64> {
 
     // Notes: for some reason ShapeSense used f64::EPSILON, now it's being reverted to the original value.
     // we might want to make this a parameter if this proves to become a problem.

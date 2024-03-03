@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, convert::TryInto};
+use std::{cmp::Ordering};
 use crate::{BinaryImage, PathF64, PointF64, PathSimplifyMode};
 use super::{PathI32, smooth::SubdivideSmooth};
 

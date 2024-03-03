@@ -1,6 +1,6 @@
 use flo_curves::{Coordinate, Coordinate2D};
 use num_traits::Float;
-use std::{cmp::PartialOrd, convert::{From, Into}, fmt::Display, ops::*};
+use std::{convert::{From, Into}, fmt::Display, ops::*};
 
 /// Generic point in 2D space
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]

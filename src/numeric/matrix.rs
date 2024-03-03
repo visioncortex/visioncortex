@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Write};
+use std::fmt::{Debug};
 
 /// Matrix operations adapted from https://github.com/sloisel/numeric
 #[derive(Clone)]
@@ -24,7 +24,6 @@ impl<const I: usize, const J: usize> Matrix<I, J> {
     }
 
     pub fn transpose(&self) -> Matrix<J, I> {
-        let x = &self;
         let mut m = Matrix::default();
         for i in 0..I {
             for j in 0..J {
