@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## 0.8.8 - 2024-03-29
+
+* Now uses Rust 2021 edition
+* Fixed compiler warnings
+* Added `BoundingRectF64`
+* Refactored implementation of `Forests`
+* Make public the `rasterizer` module
+
 ## 0.8.6 - 2023-11-17
 
 * Added `Shape::is_isosceles_triangle`
