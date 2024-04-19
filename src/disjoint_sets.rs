@@ -128,7 +128,7 @@ pub struct Label(u32);
 
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(transparent)]
-struct Rank(u8);
+struct Rank(u16);
 
 /// Data structure for building disjoint sets
 pub struct Forests<T>
