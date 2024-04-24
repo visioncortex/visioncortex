@@ -1,6 +1,7 @@
 use flo_curves::{Coordinate, Coordinate2D};
 use num_traits::Float;
 use std::{convert::{From, Into}, fmt::Display, ops::*};
+use crate::{Polar2, PolarF64};
 
 /// Generic point in 2D space
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,8 +101,7 @@ where
     T: Add<Output = T> + Copy + Neg<Output = T> + Sub<Output = T>,
 {
     #[inline]
-    /// Assumes a coordinate system with origin at the top-left. The behavior
-    /// is undefined otherwise.
+    /// Assumes a coordinate system with origin at the top-left. The behavior is undefined otherwise.
     pub fn rotate_90deg(&self, origin: Self, clockwise: bool) -> Self {
         let o = origin;
 
@@ -143,6 +143,13 @@ where
     /// The euclidean distance
     pub fn distance_to(&self, other: Point2<T>) -> T {
         (*self - other).norm()
+    }
+
+    pub fn to_polar(&self) -> Polar2<T> {
+        Polar2 {
+            a: self.y.atan2(self.x),
+            r: self.norm(),
+        }
     }
 }
 
@@ -357,12 +364,19 @@ impl PointI32 {
 }
 
 impl PointF64 {
+    #[inline]
     pub fn to_point_i32(&self) -> PointI32 {
         PointI32 { x: self.x as i32, y: self.y as i32 }
     }
 
+    #[inline]
     pub fn to_point_f32(&self) -> PointF32 {
         PointF32 { x: self.x as f32, y: self.y as f32 }
+    }
+
+    #[inline]
+    pub fn to_polar_f64(&self) -> PolarF64 {
+        self.to_polar()
     }
 }
 
