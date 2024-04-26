@@ -124,12 +124,23 @@ where
     T: Float,
 {
     #[inline]
+    #[must_use]
     pub fn rotate(&self, origin: Self, angle: T) -> Self {
         let o = origin;
         let a = angle;
         Self {
             x: a.cos() * (self.x - o.x) - a.sin() * (self.y - o.y) + o.x,
             y: a.sin() * (self.x - o.x) + a.cos() * (self.y - o.y) + o.y,
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn rotate_about_origin(&self, angle: T) -> Self {
+        let a = angle;
+        Self {
+            x: a.cos() * self.x - a.sin() * self.y,
+            y: a.sin() * self.x + a.cos() * self.y,
         }
     }
 
