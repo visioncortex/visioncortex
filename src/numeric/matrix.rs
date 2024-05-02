@@ -1,7 +1,7 @@
 use std::fmt::{Debug};
 
 /// Matrix operations adapted from https://github.com/sloisel/numeric
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Matrix<const I: usize, const J: usize> {
     pub m: [[f64; J]; I],
 }
