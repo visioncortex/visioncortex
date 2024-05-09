@@ -367,6 +367,14 @@ impl BoundingRectF64 {
         self.right_bottom.y == f64::MIN
     }
 
+    pub fn right_top(&self) -> PointF64 {
+        PointF64::new(self.right_bottom.x, self.left_top.y)
+    }
+
+    pub fn left_bottom(&self) -> PointF64 {
+        PointF64::new(self.left_top.x, self.right_bottom.y)
+    }
+
     pub fn width(self) -> f64 {
         self.right_bottom.x - self.left_top.x
     }
