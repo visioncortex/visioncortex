@@ -14,4 +14,4 @@ pub use simplify::*;
 //pub use smooth::*;
 pub use spline::*;
 pub use walker::*;
-//pub use util::*;
+pub use util::*;

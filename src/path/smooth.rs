@@ -226,7 +226,7 @@ impl SubdivideSmooth {
 
         // They intersect
         if dab.is_sign_positive() != abc.is_sign_positive() {
-            if let Some(intersection) = find_intersection(a, b, c, d) {
+            if let Some((intersection, _)) = find_intersection(a, b, c, d) {
                 return [*a, intersection, intersection, *d];
             }
         }
