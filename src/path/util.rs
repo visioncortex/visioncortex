@@ -7,7 +7,7 @@ pub(super) fn signed_area(p1: PointI32, p2: PointI32, p3: PointI32) -> i32 {
     (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Intersection {
     /// The relative location between (p1, p2). 0 means p1, 1 means p2.
     pub mua: f64,
@@ -71,6 +71,16 @@ impl Intersection {
     }
 }
 
+impl PartialEq for Intersection {
+    fn eq(&self, o: &Self) -> bool {
+        let s = self;
+        if s.mua.is_nan() && s.mub.is_nan() && o.mua.is_nan() && o.mub.is_nan() {
+            return true;
+        }
+        s.mua == o.mua && s.mub == o.mub
+    }
+}
+
 #[inline]
 fn negligible(v: f64) -> bool {
     const EPSILON: f64 = 1e-7;    
@@ -127,6 +137,7 @@ mod test {
 
     #[test]
     fn test_find_intersection_1() {
+        // +
         assert_eq!(find_intersection(
             &PointF64::new(0.,0.), &PointF64::new(2.,0.),
             &PointF64::new(1.,-1.), &PointF64::new(1.,1.),
@@ -135,6 +146,7 @@ mod test {
 
     #[test]
     fn test_find_intersection_2() {
+        // X
         assert_eq!(find_intersection(
             &PointF64::new(0.,0.), &PointF64::new(2.,2.),
             &PointF64::new(0.,2.), &PointF64::new(2.,0.),
@@ -143,6 +155,7 @@ mod test {
 
     #[test]
     fn test_find_intersection_3() {
+        // L
         assert_eq!(find_intersection(
             &PointF64::new(0.,0.), &PointF64::new(1.,0.),
             &PointF64::new(1.,0.), &PointF64::new(1.,1.),
@@ -151,9 +164,19 @@ mod test {
 
     #[test]
     fn test_find_intersection_4() {
+        // T
         assert_eq!(find_intersection(
             &PointF64::new(0.,0.), &PointF64::new(2.,0.),
             &PointF64::new(1.,0.), &PointF64::new(1.,1.),
         ), Some((PointF64::new(1.,0.), Intersection { mua: 0.5, mub: 0. })));
+    }
+
+    #[test]
+    fn test_find_intersection_5() {
+        // degenerate
+        assert_eq!(find_intersection(
+            &PointF64::new(0.,0.), &PointF64::new(2.,0.),
+            &PointF64::new(1.,0.), &PointF64::new(1.,0.),
+        ), Some((PointF64::new(1.,0.), Intersection { mua: NAN, mub: NAN })));
     }
 }
