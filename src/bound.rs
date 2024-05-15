@@ -360,6 +360,13 @@ impl BoundingRectF64 {
         }
     }
 
+    pub fn new_xy_wh(xy: PointF64, wh: PointF64) -> Self {
+        Self {
+            left_top: xy,
+            right_bottom: xy + wh,
+        }
+    }
+
     pub fn is_empty(self) -> bool {
         self.left_top.x == f64::MAX &&
         self.left_top.y == f64::MAX &&

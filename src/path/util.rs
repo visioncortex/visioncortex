@@ -178,5 +178,10 @@ mod test {
             &PointF64::new(0.,0.), &PointF64::new(2.,0.),
             &PointF64::new(1.,0.), &PointF64::new(1.,0.),
         ), Some((PointF64::new(1.,0.), Intersection { mua: NAN, mub: NAN })));
+
+        assert_eq!(find_intersection(
+            &PointF64::new(0.,0.), &PointF64::new(2.,0.),
+            &PointF64::new(1.,1.), &PointF64::new(1.,1.),
+        ), None);
     }
 }
