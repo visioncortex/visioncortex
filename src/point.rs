@@ -166,6 +166,16 @@ where
 
 impl<T> Point2<T>
 where
+    T: Default + PartialEq,
+{
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self.x == Default::default() && self.y == Default::default()
+    }
+}
+
+impl<T> Point2<T>
+where
     T: Default + Float,
 {
     #[inline]
@@ -177,7 +187,6 @@ where
             Self::default()
         }
     }
-
 }
 
 impl<T> Neg for Point2<T>
