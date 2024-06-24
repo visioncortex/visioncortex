@@ -4,7 +4,9 @@ use num_traits::Float;
 /// Polar coordinate in 2D space
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Polar2<F: Float> {
+    /// angle
     pub a: F,
+    /// radius
     pub r: F,
 }
 
