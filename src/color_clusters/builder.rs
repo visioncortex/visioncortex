@@ -403,6 +403,9 @@ impl BuilderImpl {
     }
 
     fn stage_2(&mut self) -> bool {
+        if self.cluster_areas.is_empty() {
+            return true;
+        }
         if self.cluster_areas[self.iteration as usize].count == 0 {
             self.iteration += 1;
             if self.iteration as usize == self.cluster_areas.len() {
