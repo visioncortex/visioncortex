@@ -48,10 +48,12 @@ impl BinaryImage {
         }
     }
 
+    /// panic if out of bound
     pub fn get_pixel_at(&self, p: PointI32) -> bool {
         self.get_pixel(p.x as usize, p.y as usize)
     }
 
+    /// panic if out of bound
     pub fn get_pixel(&self, x: usize, y: usize) -> bool {
         let i = y * self.width + x;
         self.pixels.get(i).unwrap()

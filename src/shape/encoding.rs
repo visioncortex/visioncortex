@@ -375,6 +375,8 @@ impl ShapeEncoding {
         Self::shape_encoding_diff_bits(&a, &b)
     }
 
+    /// Almost like humming distance between the two bit strings,
+    /// but more significant bits have higher weights
     pub fn shape_encoding_diff_bits(a: &BitVec, b: &BitVec) -> u64 {
         let mut l = 1;
         let mut diff: u64 = 0;

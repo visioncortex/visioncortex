@@ -12,7 +12,6 @@ mod image;
 mod point;
 mod polar;
 mod sampler;
-mod sat;
 mod statistic;
 mod transform;
 
@@ -30,6 +29,5 @@ pub use image::*;
 pub use point::*;
 pub use polar::*;
 pub use sampler::*;
-pub use sat::*;
 pub use statistic::*;
 pub use transform::*;

@@ -42,6 +42,9 @@ impl Shape {
         Self::image_boundary_list_transpose(image, false)
     }
 
+    /// Return coordinates of the points on the shape boundary
+    ///
+    /// transpose = false: x first, then y
     pub fn image_boundary_list_transpose(image: &BinaryImage, transpose: bool) -> Vec<PointI32> {
         let mut boundary = Vec::new();
         for xx in 0..image.width as i32 {
