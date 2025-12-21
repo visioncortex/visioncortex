@@ -1,6 +1,6 @@
 [package]
 name = "visioncortex"
-version = "0.8.9"
+version = "0.8.10"
 authors = ["Chris Tsang <tyt2y7@gmail.com>"]
 edition = "2021"
 description = "Semantic Computer Vision"

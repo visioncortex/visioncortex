@@ -1,3 +1,22 @@
+//! # ShapeCode - Shape Encoding and Symbolic Recognition
+//! 
+//! Basically we developed and experimented with a shape encoding algorithm that has very interesting properties:
+//! 
+//! + lossless encode-decode roundtrip
+//! + translation / scale invariant
+//! + rotational invariant under a normalization scheme
+//! + *the similarity of two symbols is a linear function of the weighted Hamming distance between the two encoded bitstrings*
+//! + which means querying can be done in sub-linear time
+//! 
+//! The algorithm is particularly effective in searching for a symbol (query) from a database of symbols, and the experimental results on Chinese / Korean OCR shown great results.
+//! It can be generalized to colored graphics, i.e. road signs and logos.
+//! 
+//! The idea of the algorithm is simple - it falls under the statistical shape analysis family,
+//! basically denoting the mass of the shape as fraction of the occupancy of space, and shuffling the bits by their contribution to entropy - more significant bits come first.
+//! 
+//! Another interesting property is that you can basically truncate the bit string arbitrarily (there are dedicated splice points)
+//! and still retain some resemblance to the original shape. In other words, fidelity is directly proportional to the length of the bit string.
+//! In another words, you can roughly control how much entropy a given symbol occupy.
 use crate::{BinaryImage, BitVec, Sampler, Shape, SpiralWalker};
 
 #[derive(Default)]
@@ -18,28 +37,19 @@ impl ShapeEncoding {
         let layers = ShapeEncoding::layer_from_area(size * size);
         let mut square = size;
         let mut number = 1; // number of samples to take at each layer
+
         #[cfg(test)]
-        let print = false;
-        #[cfg(test)]
-        {
-            if print {
-                println!("size={}, layers={}", size, layers);
-            }
-        }
+        println!("size={}, layers={}", size, layers);
         for _l in 0..layers {
             let mut bits = BitVec::new();
             let grid_size = 1 << (ShapeEncoding::pow_of_two(number) >> 1); // binary sqrt
             let half_value = 1 << (std::cmp::max(ShapeEncoding::pow_of_two(square) << 1, 1) - 1); // square*square / 2
             let layer_string_length = std::cmp::max(ShapeEncoding::pow_of_two(square) << 1, 1);
             #[cfg(test)]
-            {
-                if print {
-                    println!(
-                        "layer={}, square={}, layer_string_length={}",
-                        _l, square, layer_string_length
-                    );
-                }
-            }
+            println!(
+                "layer={}, square={}, layer_string_length={}",
+                _l, square, layer_string_length
+            );
             for (x, y) in SpiralWalker::new(grid_size) {
                 let x = x as usize;
                 let y = y as usize;
@@ -52,29 +62,21 @@ impl ShapeEncoding {
                     value -= 1;
                 }
                 #[cfg(test)]
-                {
-                    if print {
-                        print!(
-                            "  ({}, {}, {}, {}), value={}, bits=",
-                            x * square,
-                            y * square,
-                            (x + 1) * square,
-                            (y + 1) * square,
-                            value
-                        );
-                    }
-                }
+                print!(
+                    "  ({}, {}, {}, {}), value={}, bits=",
+                    x * square,
+                    y * square,
+                    (x + 1) * square,
+                    (y + 1) * square,
+                    value
+                );
                 let mut cursor = layer_string_length as i32 - 1;
                 while cursor >= 0 {
                     let bit = (value >> cursor) & 1;
                     bits.push(bit == 1);
                     cursor -= 1;
                     #[cfg(test)]
-                    {
-                        if print {
-                            print!("{}", bit);
-                        }
-                    }
+                    print!("{}", bit);
                 }
             }
             seq.push(bits);

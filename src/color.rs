@@ -158,6 +158,19 @@ impl Color {
             }
         }
     }
+
+    pub fn ave_4(w: Self, x: Self, y: Self, z: Self) -> Self {
+        Color {
+            r: ((w.r as u32 + x.r as u32 + y.r as u32 + z.r as u32) / 4) as u8,
+            g: ((w.g as u32 + x.g as u32 + y.g as u32 + z.g as u32) / 4) as u8,
+            b: ((w.b as u32 + x.b as u32 + y.b as u32 + z.b as u32) / 4) as u8,
+            a: ((w.a as u32 + x.a as u32 + y.a as u32 + z.a as u32) / 4) as u8,
+        }
+    }
+
+    pub fn rgb_u8(&self) -> [u8; 3] {
+        [self.r, self.g, self.b]
+    }
 }
 
 impl ColorType for Color {
@@ -197,6 +210,15 @@ impl ColorI32 {
             g: self.g - other.g,
             b: self.b - other.b,
         }
+    }
+
+    pub fn distance_squared(&self, other: &Self) -> i32 {
+        let diff = self.diff(other);
+        diff.r * diff.r + diff.g * diff.g + diff.b * diff.b
+    }
+
+    pub fn grayscale(&self) -> i32 {
+        ((self.r as i64 + self.g as i64 + self.b as i64) / 3) as i32
     }
 
     pub fn to_color(&self) -> Color {
