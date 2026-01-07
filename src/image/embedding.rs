@@ -86,11 +86,7 @@ impl ImageEmbedding {
     pub fn values_1st(&self) -> [u8; 12] {
         let idx = 3;
         let mut values = [0; 12];
-        for i in 0..4 {
-            values[i * 3 + 0] = self.values[idx + i * 3 + 0];
-            values[i * 3 + 1] = self.values[idx + i * 3 + 1];
-            values[i * 3 + 2] = self.values[idx + i * 3 + 2];
-        }
+        values.copy_from_slice(&self.values[idx .. idx + 12]);
         values
     }
 

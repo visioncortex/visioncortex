@@ -15,14 +15,14 @@ pub struct BinaryImage {
 
 /// Generalization of 2D array of pixels with any Item
 #[derive(Clone, Default)]
-pub struct ScalerField<T> {
+pub struct ScalarField<T> {
     field: Field<T>,
 }
 
 /// Component of `MonoImage`
 pub type MonoImageItem = u16;
 /// Image with grayscale values
-pub type MonoImage = ScalerField<MonoImageItem>;
+pub type MonoImage = ScalarField<MonoImageItem>;
 
 /// Image with 4 bytes per pixel
 #[derive(Clone, Default)]
@@ -233,7 +233,7 @@ impl fmt::Display for BinaryImage {
     }
 }
 
-impl<T> ScalerField<T> where T: Default {
+impl<T> ScalarField<T> where T: Default {
     pub fn new_w_h(width: usize, height: usize) -> Self {
         Self {
             field: Field::with_default(width, height),
@@ -241,7 +241,7 @@ impl<T> ScalerField<T> where T: Default {
     }
 }
 
-impl<T> ScalerField<T> where T: Clone {
+impl<T> ScalarField<T> where T: Clone {
     pub fn get_pixel(&self, x: usize, y: usize) -> T {
         self.field.get(self.field.index_at(x, y)).unwrap()
     }

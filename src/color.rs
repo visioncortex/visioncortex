@@ -37,7 +37,7 @@ pub struct ColorF64 {
 }
 
 /// RGBA; each channel is 32 bit unsigned
-#[derive(Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 pub struct ColorSum {
     pub r: u32,
     pub g: u32,
@@ -47,7 +47,7 @@ pub struct ColorSum {
 }
 
 /// HSV; each channel is 64 bit float
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Default, PartialEq, Debug)]
 pub struct ColorHsv {
     pub h: f64,
     pub s: f64,
@@ -266,12 +266,30 @@ impl ColorSum {
         self.counter += 1;
     }
 
-    pub fn merge(&mut self, color: &ColorSum) {
-        self.r += color.r;
-        self.g += color.g;
-        self.b += color.b;
-        self.a += color.a;
-        self.counter += color.counter;
+    /// Caution: might underflow
+    pub fn sub(&mut self, color: &Color) {
+        self.r -= color.r as u32;
+        self.g -= color.g as u32;
+        self.b -= color.b as u32;
+        self.a -= color.a as u32;
+        self.counter -= 1;
+    }
+
+    pub fn merge(&mut self, other: &ColorSum) {
+        self.r += other.r;
+        self.g += other.g;
+        self.b += other.b;
+        self.a += other.a;
+        self.counter += other.counter;
+    }
+
+    /// Caution: might underflow
+    pub fn unmerge(&mut self, other: &ColorSum) {
+        self.r -= other.r;
+        self.g -= other.g;
+        self.b -= other.b;
+        self.a -= other.a;
+        self.counter -= other.counter;
     }
 
     pub fn average(&self) -> Color {
@@ -289,5 +307,11 @@ impl ColorSum {
         self.b = 0;
         self.a = 0;
         self.counter = 0;
+    }
+}
+
+impl ColorName {
+    pub fn color(&self) -> Color {
+        Color::color(self)
     }
 }

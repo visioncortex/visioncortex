@@ -78,11 +78,16 @@ impl<T> Point2<T> {
 
 impl<T> Point2<T>
 where
-    T: Add<Output = T> + Mul<Output = T>,
+    T: Add<Output = T> + Mul<Output = T> + Copy,
 {
     #[inline]
     pub fn dot(self, v: Self) -> T {
         self.x * v.x + self.y * v.y
+    }
+
+    #[inline]
+    pub fn length_squared(self) -> T {
+        self.dot(self)
     }
 }
 
@@ -187,6 +192,16 @@ where
             Self::default()
         }
     }
+
+    /// Get a normalized vector of self
+    pub fn normalized(&self) -> Self {
+        let norm = self.norm();
+        if norm != T::zero() {
+            *self / norm
+        } else {
+            Self::default()
+        }
+    }
 }
 
 impl<T> Neg for Point2<T>
@@ -255,7 +270,7 @@ where
 impl<T, F> Mul<F> for Point2<T>
 where
     T: Mul<F, Output = T>,
-    F: Float,
+    F: Copy
 {
     type Output = Self;
 
@@ -270,7 +285,7 @@ where
 impl<T, F> MulAssign<F> for Point2<T>
 where
     T: MulAssign<F>,
-    F: Float,
+    F: Copy,
 {
     fn mul_assign(&mut self, rhs: F) {
         self.x.mul_assign(rhs);
@@ -281,7 +296,7 @@ where
 impl<T, F> Div<F> for Point2<T>
 where
     T: Div<F, Output = T>,
-    F: Float,
+    F: Copy,
 {
     type Output = Self;
 
@@ -297,7 +312,7 @@ where
 impl<T, F> DivAssign<F> for Point2<T>
 where
     T: DivAssign<F>,
-    F: Float,
+    F: Copy,
 {
     #[inline]
     fn div_assign(&mut self, rhs: F) {
@@ -387,6 +402,11 @@ impl PointF64 {
     #[inline]
     pub fn to_point_i32(&self) -> PointI32 {
         PointI32 { x: self.x as i32, y: self.y as i32 }
+    }
+
+    #[inline]
+    pub fn round_to_point_i32(&self) -> PointI32 {
+        PointI32 { x: self.x.round() as i32, y: self.y.round() as i32 }
     }
 
     #[inline]
