@@ -118,6 +118,30 @@ impl Shape {
         }
     }
 
+    pub fn rounded_rect(rect: BoundingRect, radius: i32) -> Self {
+        let width  = rect.width()  as usize;
+        let height = rect.height() as usize;
+        let w = width  as f64;
+        let h = height as f64;
+        let r = (radius as f64).max(0.0).min(w.min(h) / 2.0);
+
+        let mut image = BinaryImage::new_w_h(width, height);
+        for yy in 0..height {
+            for xx in 0..width {
+                let x = xx as f64 + 0.5;
+                let y = yy as f64 + 0.5;
+                let nx = x.max(r).min(w - r);
+                let ny = y.max(r).min(h - r);
+                let dx = x - nx;
+                let dy = y - ny;
+                if dx * dx + dy * dy <= r * r {
+                    image.set_pixel(xx, yy, true);
+                }
+            }
+        }
+        Self { image }
+    }
+
     pub fn is_circle(&self) -> bool {
         if std::cmp::max(self.image.width, self.image.height) - 
             std::cmp::min(self.image.width, self.image.height) >
@@ -420,5 +444,90 @@ mod tests {
         assert!(!shape.is_isosceles_triangle());
         assert!(!shape.is_circle());
         assert!(!shape.is_quadrilateral());
+    }
+
+    #[test]
+    fn rounded_rect_r0_is_full_rect() {
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 6, 4);
+        let shape = Shape::rounded_rect(rect, 0);
+        // r=0 => plain filled rectangle, all pixels set
+        assert!(shape.image.pixels.iter().all(|p| p));
+        assert_eq!(shape.image.width, 6);
+        assert_eq!(shape.image.height, 4);
+    }
+
+    #[test]
+    fn rounded_rect_degenerate_circle() {
+        // 10x10 with r=5: corners should be empty, centre filled
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 10, 10);
+        let rr = Shape::rounded_rect(rect, 5);
+        // corners cut
+        assert!(!rr.image.get_pixel(0, 0));
+        assert!(!rr.image.get_pixel(9, 0));
+        assert!(!rr.image.get_pixel(0, 9));
+        assert!(!rr.image.get_pixel(9, 9));
+        // centre filled
+        assert!(rr.image.get_pixel(5, 5));
+        // left/right midpoints on boundary
+        assert!(rr.image.get_pixel(0, 4));
+        assert!(rr.image.get_pixel(9, 5));
+    }
+
+    #[test]
+    fn rounded_rect_radius_clamped() {
+        // Huge radius should clamp to min(w,h)/2 == 5, same as r=5
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 10, 10);
+        let clamped = Shape::rounded_rect(rect, 9999);
+        let explicit = Shape::rounded_rect(rect, 5);
+        assert_eq!(
+            clamped.image.pixels.iter().collect::<Vec<_>>(),
+            explicit.image.pixels.iter().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn rounded_rect_corners_cut() {
+        // 6x4 with r=2: top-left corner pixel (0,0) should be empty
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 6, 4);
+        let shape = Shape::rounded_rect(rect, 2);
+        assert!(!shape.image.get_pixel(0, 0));
+        assert!(!shape.image.get_pixel(5, 0));
+        assert!(!shape.image.get_pixel(0, 3));
+        assert!(!shape.image.get_pixel(5, 3));
+        // centre pixel should be filled
+        assert!(shape.image.get_pixel(3, 2));
+    }
+
+    #[test]
+    fn rounded_rect_string_format() {
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 11, 9);
+        let shape = Shape::rounded_rect(rect, 4);
+        assert_eq!(
+            shape.image.to_string(),
+            "--*******--\n".to_owned() +
+            "-*********-\n" +
+            "***********\n" +
+            "***********\n" +
+            "***********\n" +
+            "***********\n" +
+            "***********\n" +
+            "-*********-\n" +
+            "--*******--\n"
+        );
+
+        let rect = BoundingRect::new_x_y_w_h(0, 0, 20, 9);
+        let shape = Shape::rounded_rect(rect, 4);
+        assert_eq!(
+            shape.image.to_string(),
+            "--****************--\n".to_owned() +
+            "-******************-\n" +
+            "********************\n" +
+            "********************\n" +
+            "********************\n" +
+            "********************\n" +
+            "********************\n" +
+            "-******************-\n" +
+            "--****************--\n"
+        );
     }
 }
