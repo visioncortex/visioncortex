@@ -27,7 +27,7 @@ impl Spline {
     }
 
     /// Returns an iterator on the vector of points on the spline
-    pub fn iter(&self) -> std::slice::Iter<PointF64> {
+    pub fn iter(&self) -> std::slice::Iter<'_, PointF64> {
         self.points.iter()
     }
 

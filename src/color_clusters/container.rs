@@ -20,7 +20,7 @@ impl Clusters {
         self.clusters_output.len()
     }
 
-    pub fn view(&self) -> ClustersView {
+    pub fn view(&self) -> ClustersView<'_> {
         ClustersView {
             width: self.width,
             height: self.height,

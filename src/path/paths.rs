@@ -43,7 +43,7 @@ impl<T> Path<T>
     }
 
     /// Returns an iterator on the vector of points in the path
-    pub fn iter(&self) -> std::slice::Iter<T> {
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.path.iter()
     }
 

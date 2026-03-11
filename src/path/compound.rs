@@ -28,11 +28,11 @@ impl CompoundPath {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<CompoundPathElement> {
+    pub fn iter(&self) -> std::slice::Iter<'_, CompoundPathElement> {
         self.paths.iter()
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<CompoundPathElement> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, CompoundPathElement> {
         self.paths.iter_mut()
     }
 

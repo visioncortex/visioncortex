@@ -120,7 +120,7 @@ impl IncrementalBuilder {
         self.builder_impl.as_mut().unwrap().tick()
     }
 
-    pub fn view(&self) -> ClustersView {
+    pub fn view(&self) -> ClustersView<'_> {
         self.builder_impl.as_ref().unwrap().view()
     }
 
@@ -245,7 +245,7 @@ impl BuilderImpl {
         }
     }
 
-    pub fn view(&self) -> ClustersView {
+    pub fn view(&self) -> ClustersView<'_> {
         ClustersView {
             width: self.width,
             height: self.height,
