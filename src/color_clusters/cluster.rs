@@ -126,12 +126,16 @@ impl Cluster {
         }
         paths
     }
+}
 
-    pub fn neighbours(&self, parent: &ClustersView) -> Vec<ClusterIndex> {
-        let myself = parent.get_cluster_at(*self.indices.first().unwrap());
+
+macro_rules! neighbours_impl {
+    ($self:expr, $parent:expr, $myself:expr) => {{
+        let myself = $myself;
+        let parent = $parent;
         let mut neighbours = HashSet::new();
 
-        for &i in self.iter() {
+        for &i in $self.iter() {
             let x = i % parent.width;
             let y = i / parent.width;
 
@@ -152,34 +156,17 @@ impl Cluster {
         let mut list: Vec<ClusterIndex> = neighbours.into_iter().collect();
         list.sort();
         list
+    }};
+}
+
+impl Cluster {
+    pub fn neighbours(&self, parent: &ClustersView) -> Vec<ClusterIndex> {
+        neighbours_impl!(self, parent, parent.get_cluster_at(*self.indices.first().unwrap()))
     }
 
-    /// Equivalent to [`neighbours()`] but operates on `BuilderImpl` directly, 
+    /// Equivalent to [`neighbours()`] but operates on `BuilderImpl` directly,
     /// removing the overhead of constructing a `ClustersView`
     pub(crate) fn neighbours_internal(&self, internal: &BuilderImpl) -> Vec<ClusterIndex> {
-        let myself = internal.cluster_indices[*self.indices.first().unwrap() as usize];
-        let mut neighbours = HashSet::new();
-
-        for &i in self.iter() {
-            let x = i % internal.width;
-            let y = i / internal.width;
-
-            for k in 0..4 {
-                let index = match k {
-                    0 => if y > 0 { internal.cluster_indices[(internal.width * (y - 1) + x) as usize] } else { ZERO },
-                    1 => if y < internal.height - 1 { internal.cluster_indices[(internal.width * (y + 1) + x) as usize] } else { ZERO },
-                    2 => if x > 0 { internal.cluster_indices[(internal.width * y + (x - 1)) as usize] } else { ZERO },
-                    3 => if x < internal.width - 1 { internal.cluster_indices[(internal.width * y + (x + 1)) as usize] } else { ZERO },
-                    _ => unreachable!(),
-                };
-                if index != ZERO && index != myself {
-                    neighbours.insert(index);
-                }
-            }
-        }
-
-        let mut list: Vec<ClusterIndex> = neighbours.into_iter().collect();
-        list.sort();
-        list
+        neighbours_impl!(self, internal, internal.cluster_indices[*self.indices.first().unwrap() as usize])
     }
 }
