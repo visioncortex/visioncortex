@@ -87,6 +87,10 @@ impl BoundingRect {
         self.bottom - self.top
     }
 
+    pub fn area(&self) -> i32 {
+        self.width() * self.height()
+    }
+
     pub fn is_empty(self) -> bool {
         self.width() == 0 && self.height() == 0
     }
@@ -187,6 +191,19 @@ impl BoundingRect {
         self.bottom = 0;
     }
 
+    /// Returns true if the two rectangles overlap in any way — including when
+    /// one is completely contained within the other, and when they only touch
+    /// at an edge or corner. Use [`BoundingRect::intersect`] to exclude containment.
+    ///
+    /// ## Examples
+    /// ```text
+    /// Partial overlap → true     Containment → true     Touching edge → true   Disjoint → false
+    /// ┌────┐                     ┌──────────┐           ┌────┬────┐            ┌────┐  ┌────┐
+    /// │  ┌─┼──┐                  │  ┌────┐  │           │    │    │            │    │  │    │
+    /// │  │ │  │                  │  │    │  │           │    │    │            │    │  │    │
+    /// └──┼─┘  │                  │  └────┘  │           └────┴────┘            └────┘  └────┘
+    ///    └────┘                  └──────────┘
+    /// ```
     pub fn hit(self, other: Self) -> bool {
         let r1 = self;
         let r2 = other;
@@ -194,6 +211,65 @@ impl BoundingRect {
           r2.right < r1.left ||
           r2.top > r1.bottom ||
           r2.bottom < r1.top )
+    }
+
+    /// Returns true if the **edges** of the two rectangles cross each other —
+    /// i.e. they partially overlap, but neither is fully contained within the other.
+    ///
+    /// This differs from [`hit`] in:
+    /// - Returns `false` when one rect is completely inside the other (no edge crossing).
+    ///
+    /// Touching at a shared edge or corner counts as intersecting (non-strict inequalities),
+    /// consistent with [`hit`].
+    ///
+    /// ## Examples
+    /// ```text
+    /// Partial overlap → true     Containment → false    Disjoint → false
+    /// ┌────┐                     ┌──────────┐           ┌────┐  ┌────┐
+    /// │  ┌─┼──┐                  │  ┌────┐  │           │    │  │    │
+    /// │  │ │  │                  │  │    │  │           │    │  │    │
+    /// └──┼─┘  │                  │  └────┘  │           └────┘  └────┘
+    ///    └────┘                  └──────────┘
+    /// ```
+    pub fn intersect(self, other: Self) -> bool {
+        let r1 = self;
+        let r2 = other;
+
+        let overlap =
+            !(r2.left > r1.right  || r2.right  < r1.left ||
+              r2.top  > r1.bottom || r2.bottom < r1.top);
+
+        let r1_contains_r2 =
+            r1.left <= r2.left && r1.right  >= r2.right &&
+            r1.top  <= r2.top  && r1.bottom >= r2.bottom;
+
+        let r2_contains_r1 =
+            r2.left <= r1.left && r2.right  >= r1.right &&
+            r2.top  <= r1.top  && r2.bottom >= r1.bottom;
+
+        overlap && !r1_contains_r2 && !r2_contains_r1
+    }
+
+    /// Returns true if `self` fully contains `other`.
+    ///
+    /// Touching edges count as containment — a rect contains itself.
+    ///
+    /// This is asymmetric: `a.contains(b)` does **not** imply `b.contains(a)`.
+    ///
+    /// ## Examples
+    /// ```text
+    /// Contains → true    Shared edge → true   Not contained → false
+    /// ┌──────────┐       ┌──────────┐         ┌────┐
+    /// │  ┌────┐  │       ┌──────┐   │         │  ┌─┼──┐
+    /// │  │    │  │       │      │   │         │  │ │  │
+    /// │  └────┘  │       └──────┘   │         └──┼─┘  │
+    /// └──────────┘       └──────────┘            └────┘
+    /// ```
+    pub fn contains(self, other: Self) -> bool {
+        self.left   <= other.left   &&
+        self.right  >= other.right  &&
+        self.top    <= other.top    &&
+        self.bottom >= other.bottom
     }
 
     pub fn clip(&mut self, other: Self) {
@@ -226,6 +302,10 @@ impl BoundingRect {
         self.top += p.y;
         self.right += p.x;
         self.bottom += p.y;
+    }
+
+    pub fn expand_xy(&self, expand_x: i32, expand_y: i32) -> Self {
+        expand(*self, expand_x, expand_y)
     }
 
     /// Tolerance means:
@@ -704,5 +784,185 @@ mod tests {
         assert_eq!(p2, boundary_points[0]);
         assert_eq!(p2 + PointI32::new(1, 0), boundary_points[1]);
         assert_eq!(p2 + PointI32::new(-1, 0), boundary_points[len-1]);
+    }
+
+    // Helpers: build a rect from (left, top, right, bottom) directly.
+    fn rect(left: i32, top: i32, right: i32, bottom: i32) -> BoundingRect {
+        BoundingRect { left, top, right, bottom }
+    }
+
+    #[test]
+    fn intersect_partial_overlap() {
+        // Classic diagonal overlap — edges clearly cross
+        let a = rect(0, 0, 10, 10);
+        let b = rect(5, 5, 15, 15);
+        assert!(a.intersect(b));
+        assert!(b.intersect(a)); // symmetric
+    }
+
+    #[test]
+    fn intersect_cross_pattern() {
+        // a is tall, b is wide — each contains the other on one axis, partial on the other.
+        // Forms a plus/cross shape; edges clearly cross on all four sides.
+        let a = rect(2, 0, 8,  10);
+        let b = rect(0, 3, 10,  7);
+        assert!(a.intersect(b));
+        assert!(b.intersect(a));
+    }
+
+    #[test]
+    fn intersect_shared_edge() {
+        // Rects share exactly one edge — counts as intersecting (non-strict)
+        let a = rect(0, 0, 10, 10);
+        let b = rect(10, 0, 20, 10);
+        assert!(a.intersect(b));
+        assert!(b.intersect(a));
+    }
+
+    #[test]
+    fn intersect_shared_corner() {
+        // Rects touch at a single corner point
+        let a = rect(0, 0, 10, 10);
+        let b = rect(10, 10, 20, 20);
+        assert!(a.intersect(b));
+        assert!(b.intersect(a));
+    }
+
+    #[test]
+    fn intersect_disjoint() {
+        // Completely separate — no overlap at all
+        let a = rect(0, 0, 10, 10);
+        let b = rect(20, 20, 30, 30);
+        assert!(!a.intersect(b));
+        assert!(!b.intersect(a));
+    }
+
+    #[test]
+    fn intersect_containment_excluded() {
+        // b is fully inside a — no edge crossing
+        let a = rect(0, 0, 20, 20);
+        let b = rect(5, 5, 15, 15);
+        assert!(!a.intersect(b));
+        assert!(!b.intersect(a));
+    }
+
+    #[test]
+    fn intersect_identical_rects() {
+        // Identical rects: each contains the other — no edge crossing
+        let a = rect(0, 0, 10, 10);
+        assert!(!a.intersect(a));
+    }
+
+    #[test]
+    fn intersect_contained_on_one_axis_partial_on_other() {
+        // b is wider than a (contains a on x) but taller on y (partial overlap)
+        // Edges DO cross: b's top/bottom edges slice through a
+        let a = rect(2,  0, 8,  10);
+        let b = rect(0,  5, 10, 15);
+        assert!(a.intersect(b));
+        assert!(b.intersect(a));
+    }
+
+    #[test]
+    fn contains_strict() {
+        let outer = BoundingRect::new_x_y_w_h(0, 0, 10, 10);
+        let inner = BoundingRect::new_x_y_w_h(2, 2,  6,  6);
+        assert!( outer.contains(inner));
+        assert!(!inner.contains(outer));
+    }
+
+    #[test]
+    fn contains_touching_boundary() {
+        // inner shares the top-left corner and is smaller — still fully contained
+        let outer = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let inner = BoundingRect::new_x_y_w_h(0, 0, 2, 2);
+        assert!(outer.contains(inner));
+        assert!(!inner.contains(outer));
+    }
+
+    #[test]
+    fn contains_self() {
+        let r = BoundingRect::new_x_y_w_h(3, 3, 5, 5);
+        assert!(r.contains(r));
+    }
+
+    #[test]
+    fn contains_partial_overlap_is_false() {
+        let a = BoundingRect::new_x_y_w_h(0, 0, 5, 5);
+        let b = BoundingRect::new_x_y_w_h(3, 3, 5, 5);
+        assert!(!a.contains(b));
+        assert!(!b.contains(a));
+    }
+
+    #[test]
+    fn contains_touching_bottom_right_boundary() {
+        // inner shares outer's bottom-right corner — still fully contained
+        let outer = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let inner = BoundingRect::new_x_y_w_h(2, 2, 2, 2);
+        assert!(outer.contains(inner));
+        assert!(!inner.contains(outer));
+    }
+
+    #[test]
+    fn contains_touching_externally_is_false() {
+        // outer's bottom-right corner == inner's top-left corner
+        let outer = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let inner = BoundingRect::new_x_y_w_h(4, 4, 2, 2);
+        assert!(!outer.contains(inner));
+    }
+
+    #[test]
+    fn contains_disjoint_is_false() {
+        let a = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let b = BoundingRect::new_x_y_w_h(5, 5, 4, 4);
+        assert!(!a.contains(b));
+        assert!(!b.contains(a));
+    }
+
+    #[test]
+    fn hit_partial_overlap() {
+        let a = BoundingRect::new_x_y_w_h(0, 0, 5, 5);
+        let b = BoundingRect::new_x_y_w_h(3, 3, 5, 5);
+        assert!(a.hit(b));
+        assert!(b.hit(a));
+    }
+
+    #[test]
+    fn hit_containment() {
+        let outer = BoundingRect::new_x_y_w_h(0, 0, 10, 10);
+        let inner = BoundingRect::new_x_y_w_h(2, 2,  4,  4);
+        assert!(outer.hit(inner));
+        assert!(inner.hit(outer));
+    }
+
+    #[test]
+    fn hit_touching_edge() {
+        // right edge of a == left edge of b
+        let a = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let b = BoundingRect::new_x_y_w_h(4, 0, 4, 4);
+        assert!(a.hit(b));
+        assert!(b.hit(a));
+    }
+
+    #[test]
+    fn hit_touching_corner() {
+        let a = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let b = BoundingRect::new_x_y_w_h(4, 4, 4, 4);
+        assert!(a.hit(b));
+        assert!(b.hit(a));
+    }
+
+    #[test]
+    fn hit_disjoint() {
+        let a = BoundingRect::new_x_y_w_h(0, 0, 4, 4);
+        let b = BoundingRect::new_x_y_w_h(5, 5, 4, 4);
+        assert!(!a.hit(b));
+        assert!(!b.hit(a));
+    }
+
+    #[test]
+    fn hit_self() {
+        let r = BoundingRect::new_x_y_w_h(3, 3, 5, 5);
+        assert!(r.hit(r));
     }
 }

@@ -8,6 +8,10 @@ pub struct Shape {
 }
 
 impl Shape {
+    pub fn new(image: BinaryImage) -> Self {
+        image.into()
+    }
+
     pub fn image_boundary(image: &BinaryImage) -> BinaryImage {
         Self::image_boundary_and_position_length(image).0
     }
