@@ -37,6 +37,7 @@ pub struct BoundStat {
 }
 
 impl BoundStat {
+    /// Computes aggregate statistics over a slice of bounded objects.
     pub fn calculate<B: Bound>(bs: &[B]) -> Self {
         let mut sum_area   = 0;
         let mut sum_width  = 0;
@@ -69,7 +70,9 @@ impl BoundStat {
 }
 
 impl BoundingRect {
-    // assume top-left origin
+    /// Creates a rect from a top-left origin `(x, y)` with size `(w, h)`.
+    ///
+    /// Coordinates use a top-left origin: x increases right, y increases down.
     pub fn new_x_y_w_h(x: i32, y: i32, w: i32, h: i32) -> Self {
         Self {
             left: x,
@@ -79,22 +82,27 @@ impl BoundingRect {
         }
     }
 
+    /// Returns `right - left`.
     pub fn width(self) -> i32 {
         self.right - self.left
     }
 
+    /// Returns `bottom - top`.
     pub fn height(self) -> i32 {
         self.bottom - self.top
     }
 
+    /// Returns `width * height`.
     pub fn area(&self) -> i32 {
         self.width() * self.height()
     }
 
+    /// Returns true if both width and height are zero (the default state).
     pub fn is_empty(self) -> bool {
         self.width() == 0 && self.height() == 0
     }
 
+    /// Returns the center point, rounded toward zero on each axis.
     pub fn center(self) -> PointI32 {
         PointI32 {
             x: (self.left + self.right) >> 1,
@@ -102,31 +110,37 @@ impl BoundingRect {
         }
     }
 
+    /// Returns the top-left corner `(left, top)`. Alias of [`top_left`](Self::top_left).
     #[inline]
     pub fn left_top(&self) -> PointI32 {
         PointI32::new(self.left, self.top)
     }
 
+    /// Returns the top-left corner `(left, top)`. Alias of [`left_top`](Self::left_top).
     #[inline]
     pub fn top_left(&self) -> PointI32 {
         PointI32::new(self.left, self.top)
     }
 
+    /// Returns the top-right corner `(right, top)`.
     #[inline]
     pub fn top_right(&self) -> PointI32 {
         PointI32::new(self.right, self.top)
     }
 
+    /// Returns the bottom-left corner `(left, bottom)`.
     #[inline]
     pub fn bottom_left(&self) -> PointI32 {
         PointI32::new(self.left, self.bottom)
     }
 
+    /// Returns the bottom-right corner `(right, bottom)`. Alias of [`bottom_right`](Self::bottom_right).
     #[inline]
     pub fn right_bottom(&self) -> PointI32 {
         PointI32::new(self.right, self.bottom)
     }
 
+    /// Returns the bottom-right corner `(right, bottom)`. Alias of [`right_bottom`](Self::right_bottom).
     #[inline]
     pub fn bottom_right(&self) -> PointI32 {
         PointI32::new(self.right, self.bottom)
@@ -138,15 +152,23 @@ impl BoundingRect {
         diff.dot(diff)
     }
 
+    /// Returns `max(w, h) / min(w, h)` as a float. Always `>= 1.0`.
     pub fn aspect_ratio(self) -> f64 {
         std::cmp::max(self.width(), self.height()) as f64
             / std::cmp::min(self.width(), self.height()) as f64
     }
 
+    /// Returns `2 * max(w, h) / min(w, h)` as an integer — a doubled aspect ratio
+    /// that avoids floating-point for cheap comparisons.
     pub fn aspect_ratio_doubled(self) -> i32 {
         2 * std::cmp::max(self.width(), self.height()) / std::cmp::min(self.width(), self.height())
     }
 
+    /// Expands the rect to include the pixel at `(x, y)`.
+    ///
+    /// A pixel at `(x, y)` occupies the unit cell `[x, x+1) × [y, y+1)`,
+    /// so `right` and `bottom` are set to `x+1` / `y+1` when extended.
+    /// If the rect is empty (`is_empty()`), it is initialised to exactly that pixel.
     pub fn add_x_y(&mut self, x: i32, y: i32) {
         if self.is_empty() {
             self.left = x;
@@ -167,6 +189,18 @@ impl BoundingRect {
         }
     }
 
+    /// Expands `self` to be the smallest rect that encloses both `self` and `other`.
+    ///
+    /// If `other` is empty it is ignored. If `self` is empty it is replaced by `other`.
+    ///
+    /// ```text
+    /// ┌────┐            ┌──────────┐
+    /// │self│   merge    │          │
+    /// └────┘   ──────►  │          │
+    ///      ┌─────┐      │          │
+    ///      │other│      │          │
+    ///      └─────┘      └──────────┘
+    /// ```
     pub fn merge(&mut self, other: Self) {
         if other.is_empty() {
             return;
@@ -184,6 +218,7 @@ impl BoundingRect {
         self.bottom = std::cmp::max(self.bottom, other.bottom);
     }
 
+    /// Resets the rect to an empty rect at the origin `(0,0,0,0)`.
     pub fn clear(&mut self) {
         self.left = 0;
         self.right = 0;
@@ -272,6 +307,18 @@ impl BoundingRect {
         self.bottom >= other.bottom
     }
 
+    /// Shrinks `self` to the intersection with `other` (clamps each edge inward).
+    ///
+    /// If the two rects do not overlap the result is undefined — `clip` does not
+    /// check for overlap, it just clamps each edge independently.
+    ///
+    /// ```text
+    /// ┌──────────┐
+    /// │self  ┌───┼────┐          ┌───┐
+    /// │      │ * │    │   clip   │ * │  ← self is now the overlap region
+    /// │      └───┼────┘  ──────► └───┘
+    /// └──────────┘other
+    /// ```
     pub fn clip(&mut self, other: Self) {
         if self.left < other.left {
             self.left = other.left;
@@ -287,6 +334,17 @@ impl BoundingRect {
         }
     }
 
+    /// Returns the smallest square that is centered on this rect and encloses it.
+    ///
+    /// Side length is `max(width, height)`. The shorter axis is padded equally on both sides.
+    ///
+    /// ```text
+    /// ┌──────────┐        ┌──────────┐
+    /// │          │        │──────────│
+    /// │  (wide)  │  ───►  │          │  (square)
+    /// └──────────┘        │──────────│
+    ///                     └──────────┘
+    /// ```
     pub fn squared(self) -> Self {
         let size = std::cmp::max(self.width(), self.height());
         Self::new_x_y_w_h(
@@ -297,6 +355,7 @@ impl BoundingRect {
         )
     }
 
+    /// Shifts all four edges by the vector `p` (in-place).
     pub fn translate(&mut self, p: PointI32) {
         self.left += p.x;
         self.top += p.y;
@@ -304,6 +363,17 @@ impl BoundingRect {
         self.bottom += p.y;
     }
 
+    /// Returns a new rect grown outward by `expand_x` on each side horizontally
+    /// and `expand_y` on each side vertically.
+    ///
+    /// ```text
+    ///    ←   expand_x   →
+    ///   ┌────────────────┐  
+    ///   │   ┌────────┐   │  ↑
+    ///   │   │  self  │   │  expand_y
+    ///   │   └────────┘   │  ↓
+    ///   └────────────────┘  
+    /// ```
     pub fn expand_xy(&self, expand_x: i32, expand_y: i32) -> Self {
         expand(*self, expand_x, expand_y)
     }
@@ -323,6 +393,7 @@ impl BoundingRect {
         (p.y == self.top || p.y == self.bottom) && (self.left-t <= p.x && p.x <= self.right+t)
     }
 
+    /// Returns true if `p` is strictly inside the rect — on the boundary does **not** count.
     pub fn have_point_inside(&self, p: PointI32) -> bool {
         (self.left < p.x && p.x < self.right)
         &&
@@ -429,10 +500,12 @@ impl Default for BoundingRectF64 {
 }
 
 impl BoundingRectF64 {
+    /// Creates a rect from explicit corner points.
     pub fn new(left_top: PointF64, right_bottom: PointF64) -> Self {
         Self { left_top, right_bottom }
     }
 
+    /// Creates a rect from a top-left origin `(x, y)` with size `(w, h)`.
     pub fn new_x_y_w_h(x: f64, y: f64, w: f64, h: f64) -> Self {
         Self {
             left_top: PointF64::new(x, y),
@@ -440,6 +513,7 @@ impl BoundingRectF64 {
         }
     }
 
+    /// Creates a rect from a top-left point `xy` and a size vector `wh`.
     pub fn new_xy_wh(xy: PointF64, wh: PointF64) -> Self {
         Self {
             left_top: xy,
@@ -447,6 +521,7 @@ impl BoundingRectF64 {
         }
     }
 
+    /// Returns true if this is the default sentinel value (no points have been merged in).
     pub fn is_empty(self) -> bool {
         self.left_top.x == f64::MAX &&
         self.left_top.y == f64::MAX &&
@@ -454,22 +529,27 @@ impl BoundingRectF64 {
         self.right_bottom.y == f64::MIN
     }
 
+    /// Returns the top-right corner `(right, top)`.
     pub fn right_top(&self) -> PointF64 {
         PointF64::new(self.right_bottom.x, self.left_top.y)
     }
 
+    /// Returns the bottom-left corner `(left, bottom)`.
     pub fn left_bottom(&self) -> PointF64 {
         PointF64::new(self.left_top.x, self.right_bottom.y)
     }
 
+    /// Returns `right - left`.
     pub fn width(self) -> f64 {
         self.right_bottom.x - self.left_top.x
     }
 
+    /// Returns `bottom - top`.
     pub fn height(self) -> f64 {
         self.right_bottom.y - self.left_top.y
     }
 
+    /// Expands `self` to enclose `other`. Ignores `other` if it is empty; replaces `self` if `self` is empty.
     pub fn merge(&mut self, other: Self) {
         if other.is_empty() {
             return;
@@ -485,6 +565,7 @@ impl BoundingRectF64 {
         self.right_bottom.y = self.right_bottom.y.max(other.right_bottom.y);
     }
 
+    /// Expands the rect to include point `p`.
     pub fn add_point(&mut self, p: PointF64) {
         self.left_top.x = self.left_top.x.min(p.x);
         self.left_top.y = self.left_top.y.min(p.y);
@@ -492,6 +573,8 @@ impl BoundingRectF64 {
         self.right_bottom.y = self.right_bottom.y.max(p.y);
     }
 
+    /// Converts to an integer `BoundingRect` by flooring `left_top` and ceiling `right_bottom`,
+    /// so the result always encloses the original floating-point rect.
     pub fn to_rect(&self) -> BoundingRect {
         BoundingRect {
             left: self.left_top.x.floor() as i32,
@@ -514,6 +597,7 @@ impl Bound for BoundingRectF64 {
     }
 }
 
+/// Returns the mean width of a slice of bounded objects (integer division).
 pub fn average_width<B: Bound>(bs: &[B]) -> i32 {
     let sum: i32 = bs
         .iter()
@@ -523,6 +607,7 @@ pub fn average_width<B: Bound>(bs: &[B]) -> i32 {
     sum / (bs.len() as i32)
 }
 
+/// Returns the mean height of a slice of bounded objects (integer division).
 pub fn average_height<B: Bound>(bs: &[B]) -> i32 {
     let sum: i32 = bs
         .iter()
@@ -532,6 +617,7 @@ pub fn average_height<B: Bound>(bs: &[B]) -> i32 {
     sum / (bs.len() as i32)
 }
 
+/// Returns the smallest `BoundingRect` that encloses all items in `bs`.
 pub fn enclosing_bound<B: Bound>(bs: &[B]) -> BoundingRect {
     let mut enclosing = BoundingRect::default();
 
@@ -542,6 +628,10 @@ pub fn enclosing_bound<B: Bound>(bs: &[B]) -> BoundingRect {
     enclosing
 }
 
+/// Groups items whose expanded bounding rects overlap, returning one `Vec<B>` per group.
+///
+/// Each item's bound is grown outward by `expand_x`/`expand_y` before the overlap test,
+/// so items that are close but not touching can still be merged into the same group.
 pub fn merge_expand<B: Bound>(items: Vec<B>, expand_x: i32, expand_y: i32) -> Vec<Vec<B>> {
     disjoint_sets::group_by_cached_key(
         items,
@@ -552,6 +642,7 @@ pub fn merge_expand<B: Bound>(items: Vec<B>, expand_x: i32, expand_y: i32) -> Ve
     )
 }
 
+/// Returns a new rect grown outward by `expand_x` horizontally and `expand_y` vertically on each side.
 pub fn expand(b: BoundingRect, expand_x: i32, expand_y: i32) -> BoundingRect {
     BoundingRect::new_x_y_w_h(
         b.left - expand_x,
