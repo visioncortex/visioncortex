@@ -17,3 +17,8 @@ exclude = [
 bit-vec = "0.6"
 num-traits = "0.2"
 flo_curves = "0.3"
+libm = { version = "0.2", optional = true }
+
+[features]
+default = []
+deterministic-math = ["libm"]

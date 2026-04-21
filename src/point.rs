@@ -1,7 +1,7 @@
 use flo_curves::{Coordinate, Coordinate2D};
 use num_traits::Float;
 use std::{convert::{From, Into}, fmt::Display, ops::*};
-use crate::{Polar2, PolarF64};
+use crate::{DetermMath, Polar2, PolarF64};
 
 /// Generic point in 2D space
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -129,28 +129,7 @@ where
     T: Float,
 {
     #[inline]
-    #[must_use]
-    pub fn rotate(&self, origin: Self, angle: T) -> Self {
-        let o = origin;
-        let a = angle;
-        Self {
-            x: a.cos() * (self.x - o.x) - a.sin() * (self.y - o.y) + o.x,
-            y: a.sin() * (self.x - o.x) + a.cos() * (self.y - o.y) + o.y,
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn rotate_about_origin(&self, angle: T) -> Self {
-        let a = angle;
-        Self {
-            x: a.cos() * self.x - a.sin() * self.y,
-            y: a.sin() * self.x + a.cos() * self.y,
-        }
-    }
-
-    #[inline]
-    /// The L2-norm
+    /// The L2-norm. Uses `sqrt` (IEEE 754 correctly-rounded) — no transcendentals.
     pub fn norm(self) -> T {
         self.dot(self).sqrt()
     }
@@ -160,10 +139,39 @@ where
     pub fn distance_to(&self, other: Point2<T>) -> T {
         (*self - other).norm()
     }
+}
+
+/// Methods that use transcendentals — bounded on `DetermMath` so that with the
+/// `deterministic-math` feature enabled, they route through `libm` for
+/// cross-platform bit-identity.
+impl<T> Point2<T>
+where
+    T: Float + DetermMath,
+{
+    #[inline]
+    #[must_use]
+    pub fn rotate(&self, origin: Self, angle: T) -> Self {
+        let o = origin;
+        let a = angle;
+        Self {
+            x: a.determ_cos() * (self.x - o.x) - a.determ_sin() * (self.y - o.y) + o.x,
+            y: a.determ_sin() * (self.x - o.x) + a.determ_cos() * (self.y - o.y) + o.y,
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn rotate_about_origin(&self, angle: T) -> Self {
+        let a = angle;
+        Self {
+            x: a.determ_cos() * self.x - a.determ_sin() * self.y,
+            y: a.determ_sin() * self.x + a.determ_cos() * self.y,
+        }
+    }
 
     pub fn to_polar(&self) -> Polar2<T> {
         Polar2 {
-            a: self.y.atan2(self.x),
+            a: self.y.determ_atan2(self.x),
             r: self.norm(),
         }
     }
