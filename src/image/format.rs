@@ -169,8 +169,11 @@ impl BinaryImage {
     }
 
     pub fn rotate(&self, angle: f64) -> BinaryImage {
-        let rotated_width = (self.width as f64 * angle.cos().abs() + self.height as f64 * angle.sin().abs()).round() as usize;
-        let rotated_height = (self.width as f64 * angle.sin().abs() + self.height as f64 * angle.cos().abs()).round() as usize;
+        use crate::DetermMath;
+        let cos_abs = angle.determ_cos().abs();
+        let sin_abs = angle.determ_sin().abs();
+        let rotated_width = (self.width as f64 * cos_abs + self.height as f64 * sin_abs).round() as usize;
+        let rotated_height = (self.width as f64 * sin_abs + self.height as f64 * cos_abs).round() as usize;
         let mut rotated_image = BinaryImage::new_w_h(rotated_width, rotated_height);
         let origin = PointF64::new(rotated_width as f64 / 2.0, rotated_height as f64 / 2.0);
         let offset = PointF64::new(

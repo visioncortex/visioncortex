@@ -107,10 +107,15 @@ where T: std::ops::Add<Output = T> + std::ops::Mul<Output = T> + Copy + Into<f64
 }
 
 pub(super) fn angle(p: &PointF64) -> f64 {
+    // `DetermMath` routes to `libm::acos` under the `deterministic-math`
+    // feature; otherwise delegates to `f64::acos`. The feature gate ensures
+    // bit-identity across Windows / macOS / Linux for downstream consumers
+    // that need reproducible output.
+    use crate::DetermMath;
     if p.y.is_sign_negative() {
-        -p.x.acos()
+        -p.x.determ_acos()
     } else {
-        p.x.acos()
+        p.x.determ_acos()
     }
 }
 

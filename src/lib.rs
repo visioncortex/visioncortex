@@ -1,5 +1,6 @@
 mod color_stat;
 mod color;
+mod determ_math;
 mod field;
 mod image;
 mod numeric;
@@ -22,6 +23,7 @@ pub mod tile_map;
 pub use bound::{Bound, BoundingRect, BoundingRectF64, BoundStat};
 pub use color_stat::*;
 pub use color::*;
+pub use determ_math::DetermMath;
 pub use disjoint_sets::Forests;
 pub use field::*;
 pub use image::*;
