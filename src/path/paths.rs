@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Write};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Range, RangeFrom, RangeInclusive, Sub};
 
-use crate::{BinaryImage, Point2, PointF64, PointI32, Shape, ToSvgString};
+use crate::{BinaryImage, Point2, PointF64, PointI32, ToSvgString};
 use super::{PathSimplify, PathSimplifyMode, PathWalker, smooth::SubdivideSmooth, reduce::reduce};
 
 #[derive(Clone, Debug, Default)]
@@ -320,7 +320,7 @@ impl PathI32 {
     }
 
     fn image_to_path_baseline(image: &BinaryImage, clockwise: bool) -> PathI32 {
-        let (_boundary, start, _length) = Shape::image_boundary_and_position_length(&image);
+        let start = first_ink_pixel(image);
         let mut path = Vec::new();
         if let Some(start) = start {
             let walker = PathWalker::new(&image, start, clockwise);
@@ -328,6 +328,43 @@ impl PathI32 {
         }
         PathI32 { path }
     }
+}
+
+/// Position of the first ink pixel of `image` in row-major order, or `None` when the image
+/// holds no ink at all.
+///
+/// This is the pixel `PathWalker` starts from, and it is always on the boundary of the
+/// shape: the pixel above it comes earlier in row-major order, so it has to be background.
+fn first_ink_pixel(image: &BinaryImage) -> Option<PointI32> {
+    let pixels = image.width * image.height;
+    if pixels == 0 {
+        return None;
+    }
+
+    for (i, block) in image.pixels.blocks().enumerate() {
+        let block_bits = std::mem::size_of_val(&block) * 8;
+        let base = i * block_bits;
+        if base >= pixels {
+            break;
+        }
+
+        if block == 0 {
+            continue;
+        }
+
+        // A BitVec can be longer than the image it holds, since `negative()` rounds up to
+        // whole bytes, so a set bit past the last pixel is not a pixel at all.
+        for i in base..std::cmp::min(base + block_bits, pixels) {
+            if image.pixels[i] {
+                return Some(PointI32 {
+                    x: (i % image.width) as i32,
+                    y: (i / image.width) as i32,
+                });
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

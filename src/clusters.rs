@@ -119,26 +119,7 @@ impl Cluster {
     }
 
     pub fn image_to_paths(image: &BinaryImage, mode: PathSimplifyMode) -> Vec<PathI32> {
-        let mut boundaries = vec![(image.clone(), PointI32 { x: 0, y: 0 })];
-        let holes = image.negative().to_clusters(false);
-        for hole in holes.iter() {
-            if  hole.rect.left as usize == 0 ||
-                hole.rect.top as usize == 0 ||
-                hole.rect.right as usize == image.width ||
-                hole.rect.bottom as usize == image.height {
-                continue;
-            }
-            for p in hole.points.iter() {
-                boundaries[0].0.set_pixel(p.x as usize, p.y as usize, true);
-            }
-            boundaries.push((
-                hole.to_binary_image(),
-                PointI32 {
-                    x: hole.rect.left,
-                    y: hole.rect.top,
-                },
-            ));
-        }
+        let mut boundaries = image_boundaries(image);
         let mut paths = vec![];
         for (i, (image, offset)) in boundaries.iter_mut().enumerate() {
             let mut path = PathI32::image_to_path(image, i == 0, mode);
@@ -153,26 +134,7 @@ impl Cluster {
     const OUTSET_RATIO: f64 = 8.0;
 
     pub fn image_to_splines(image: &BinaryImage, corner_threshold: f64, segment_length: f64, max_iterations:usize, splice_threshold: f64) -> Vec<Spline> {
-        let mut boundaries = vec![(image.clone(), PointI32 { x: 0, y: 0 })];
-        let holes = image.negative().to_clusters(false);
-        for hole in holes.iter() {
-            if  hole.rect.left as usize == 0 ||
-                hole.rect.top as usize == 0 ||
-                hole.rect.right as usize == image.width ||
-                hole.rect.bottom as usize == image.height {
-                continue;
-            }
-            for p in hole.points.iter() {
-                boundaries[0].0.set_pixel(p.x as usize, p.y as usize, true);
-            }
-            boundaries.push((
-                hole.to_binary_image(),
-                PointI32 {
-                    x: hole.rect.left,
-                    y: hole.rect.top,
-                },
-            ));
-        }
+        let mut boundaries = image_boundaries(image);
         let mut splines = vec![];
         for (i, (image, offset)) in boundaries.iter_mut().enumerate() {
             let mut spline = Spline::from_image(
@@ -362,6 +324,191 @@ impl BinaryImage {
 
         Clusters { clusters, rect }
     }
+}
+
+/// Label of a background cluster. Stored in the label map as `label + 1`, so that
+/// `0` marks an ink pixel.
+type Label = u32;
+
+/// The background clusters found so far by [`cluster_background`].
+///
+/// A cluster is a pixel count and a bounding rect, named by a [`Label`]. When the scan
+/// discovers that two labels name the same region it merges one into the other, and the
+/// merges form a union-find forest that [`Scan::find`] walks to reach the cluster a label
+/// now belongs to. Labels are never reused, so a label read from the label map stays valid
+/// however many merges have happened since it was written there.
+///
+/// Clusters are returned by [`Scan::clusters`] in the order they were created, which is the
+/// order of the top left pixel of each.
+#[derive(Default)]
+struct Scan {
+    /// The label each label was merged into, or the label itself if it is a root.
+    parent: Vec<Label>,
+    /// Pixels in each cluster; `0` once it has been merged into another.
+    size: Vec<usize>,
+    /// Bounding rect of each cluster.
+    rect: Vec<BoundingRect>,
+}
+
+impl Scan {
+    fn find(&mut self, mut label: Label) -> Label {
+        while self.parent[label as usize] != label {
+            let grandparent = self.parent[self.parent[label as usize] as usize];
+            self.parent[label as usize] = grandparent;
+            label = grandparent;
+        }
+        label
+    }
+
+    fn combine(&mut self, from: Label, to: Label) {
+        self.parent[from as usize] = to;
+        self.size[to as usize] += self.size[from as usize];
+        self.size[from as usize] = 0;
+        let from_rect = self.rect[from as usize];
+        self.rect[to as usize].merge(from_rect);
+    }
+
+    fn new_cluster(&mut self) -> Label {
+        let label = self.parent.len() as Label;
+        if label == Label::max_value() {
+            panic!("overflow");
+        }
+        self.parent.push(label);
+        self.size.push(0);
+        self.rect.push(BoundingRect::default());
+        label
+    }
+
+    fn add(&mut self, label: Label, x: usize, y: usize) {
+        self.size[label as usize] += 1;
+        self.rect[label as usize].add_x_y(x as i32, y as i32);
+    }
+
+    /// Label and bounding rect of every cluster that survived the scan, in the order they
+    /// were created.
+    fn clusters(&self) -> impl Iterator<Item = (Label, BoundingRect)> + use<'_> {
+        (0..self.parent.len() as Label)
+            .filter(|&label| self.parent[label as usize] == label)
+            .map(|label| (label, self.rect[label as usize]))
+    }
+}
+
+/// Clusters the background of `image` — the pixels that are not ink — 4-connected. Returns
+/// the clusters and a map holding one label per pixel, stored as `label + 1` so that `0` can
+/// stand for an ink pixel.
+///
+/// The result of this is identical to calling `image.negative().to_clusters(false)`. However,
+/// this differs in that it does not materialize the points of each cluster, which is wasted
+/// effort.
+fn cluster_background(image: &BinaryImage) -> (Scan, Vec<Label>) {
+    let (width, height) = (image.width, image.height);
+    let mut map = vec![0 as Label; width * height];
+    let mut scan = Scan::default();
+
+    for y in 0..height {
+        for x in 0..width {
+            if image.get_pixel(x, y) {
+                continue;
+            }
+
+            let up = if y > 0 && !image.get_pixel(x, y - 1) {
+                Some(scan.find(map[(y - 1) * width + x] - 1))
+            } else {
+                None
+            };
+
+            let left = if x > 0 && !image.get_pixel(x - 1, y) {
+                Some(scan.find(map[y * width + x - 1] - 1))
+            } else {
+                None
+            };
+
+            let cluster = match (up, left) {
+                (Some(up), Some(left)) if up != left => {
+                    // Fold the smaller cluster into the larger, so that `find` stays shallow.
+                    if scan.size[left as usize] <= scan.size[up as usize] {
+                        scan.combine(left, up);
+                        up
+                    } else {
+                        scan.combine(up, left);
+                        left
+                    }
+                }
+                (Some(up), _) => up,
+                (None, Some(left)) => left,
+                (None, None) => scan.new_cluster(),
+            };
+
+            map[y * width + x] = cluster + 1;
+            scan.add(cluster, x, y);
+        }
+    }
+
+    (scan, map)
+}
+
+/// The images whose boundaries make up the paths of `image`: the image itself with
+/// its holes filled in, followed by each hole, cropped to its bounding rect.
+///
+/// A hole is a background cluster that does not touch the border of the image.
+fn image_boundaries(image: &BinaryImage) -> Vec<(BinaryImage, PointI32)> {
+    let (mut scan, map) = cluster_background(image);
+
+    let mut boundaries = vec![(image.clone(), PointI32 { x: 0, y: 0 })];
+
+    // Where a hole lands in `boundaries`, by label; 0 for a cluster that is not a hole.
+    // The holes are drawn in one pass over the label map below, rather than a pass over
+    // each hole's rect: holes nest, so an outer hole's rect can span most of the image and
+    // walking rects would cover the same pixels again and again.
+    let mut boundary_of = vec![0 as Label; scan.parent.len()];
+
+    for (hole, rect) in scan.clusters() {
+        if  rect.left as usize == 0 ||
+            rect.top as usize == 0 ||
+            rect.right as usize == image.width ||
+            rect.bottom as usize == image.height {
+            continue;
+        }
+
+        boundary_of[hole as usize] = boundaries.len() as Label;
+
+        boundaries.push((
+            BinaryImage::new_w_h(rect.width() as usize, rect.height() as usize),
+            PointI32 {
+                x: rect.left,
+                y: rect.top,
+            },
+        ));
+    }
+
+    if boundaries.len() > 1 {
+        let (filled, holes) = boundaries.split_at_mut(1);
+
+        for y in 0..image.height {
+            for x in 0..image.width {
+                let label = map[y * image.width + x];
+                if label == 0 {
+                    continue;
+                }
+
+                let boundary = boundary_of[scan.find(label - 1) as usize];
+                if boundary == 0 {
+                    continue;
+                }
+
+                filled[0].0.set_pixel(x, y, true);
+
+                let (hole_image, offset) = &mut holes[boundary as usize - 1];
+                hole_image.set_pixel(
+                    x - offset.x as usize,
+                    y - offset.y as usize,
+                    true,
+                );
+            }
+        }
+    }
+
+    boundaries
 }
 
 #[cfg(test)]
