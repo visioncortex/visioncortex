@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   by a new render/triangulate fuzzer (`fuzz/`, kept out of the package); exact
   pixel outlines now triangulate cleanly across 144k random scenes.
 
+* Fixed `PathSimplifyMode::Polygon` returning outlines that cross themselves
+  or the cluster's other rings, mostly around thin (1-2px) strokes and cracks.
+  Simplified one ring at a time, the two sides of such a feature are within
+  tolerance of each other: `limit_penalties` would take a chord along one side
+  that cut across the other, and `remove_staircase` could shift an edge onto a
+  neighbouring one. `image_to_paths` now simplifies a cluster's rings together
+  (`PathSimplify::simplify_jointly`), and only where the plain result crosses or
+  overlaps itself are the rings involved simplified again, with every new edge
+  kept clear of all others. Everywhere else the output is byte-for-byte the
+  same, and rings of a few pixels still fold away as before.
+
 ## 0.9.3 - 2026-08-14
 
 * Fixed color clustering aborting with `attempt to divide by zero` in

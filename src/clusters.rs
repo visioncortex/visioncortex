@@ -1,6 +1,6 @@
 //! Algorithm to cluster a binary image
 
-use crate::{BinaryImage, BoundingRect, CompoundPath, PathI32, PathSimplifyMode, PointI32, ScalarField, Shape, Spline};
+use crate::{BinaryImage, BoundingRect, CompoundPath, PathI32, PathSimplify, PathSimplifyMode, PointI32, ScalarField, Shape, Spline};
 
 /// Provisional label handed out by the scanline pass of [`BinaryImage::to_clusters`].
 ///
@@ -141,11 +141,21 @@ impl Cluster {
         }
         let mut paths = vec![];
         for (i, (image, offset)) in boundaries.iter_mut().enumerate() {
-            let mut path = PathI32::image_to_path(image, i == 0, mode);
+            let simplify = match mode {
+                PathSimplifyMode::Polygon => PathSimplifyMode::None,
+                other => other,
+            };
+            let mut path = PathI32::image_to_path(image, i == 0, simplify);
             path.offset(offset);
             if !path.is_empty() {
                 paths.push(path);
             }
+        }
+        if let PathSimplifyMode::Polygon = mode {
+            // Simplify the outline and its holes together, so that no chord
+            // of one ring cuts across another.
+            let clockwise: Vec<bool> = (0..paths.len()).map(|i| i == 0).collect();
+            paths = PathSimplify::simplify_jointly(&paths, &clockwise);
         }
         paths
     }

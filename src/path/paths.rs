@@ -287,10 +287,11 @@ impl PathI32 {
 
     /// Returns a copy of self after Path Simplification:
     /// 
-    /// First remove staircases then simplify by limiting penalties.
+    /// First remove staircases then simplify by limiting penalties, without
+    /// letting the path cross or overlap itself (see
+    /// [`PathSimplify::simplify_jointly`]).
     pub fn simplify(&self, clockwise: bool) -> Self {
-        let path = PathSimplify::remove_staircase(self, clockwise);
-        PathSimplify::limit_penalties(&path)
+        PathSimplify::simplify_jointly(std::slice::from_ref(self), &[clockwise]).pop().unwrap()
     }
 
     /// Converts outline of pixel cluster to path with Path Walker. 
