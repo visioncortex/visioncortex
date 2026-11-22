@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+
+* Made `polypartition` robust on outlines traced from pixels, thin strokes in
+  particular. On such input, ear clipping returned overlapping triangles or
+  `No ear found!`, the optimal DP `No best vertex found`, the monotone
+  partition `Input polygon is not monotone.` or overlaps, and `remove_holes`
+  failed on holes touching the outline. The port had turned upstream's strict
+  `> 0` / `< 0` tests into `is_sign_positive()`, so every collinear case
+  counted as convex or non-intersecting, and upstream itself assumes general
+  position. Diagonals and bridges now count as blocked when they pass through
+  a vertex, but not when they merely share a line with an edge. Ear tests see
+  T-junctions and coincident corners, touching holes are spliced in or split
+  apart at the shared point, and the monotone sweep breaks ties by symbolic
+  perturbation. Two monotone bugs that also hit input in general position are
+  fixed: a helper set to a vertex copy in the piece already closed off (as in
+  upstream), and a helper written through an edge index made stale by
+  `add_diagonal`. Output for input in general position is unchanged. Checked
+  by a new render/triangulate fuzzer (`fuzz/`, kept out of the package); exact
+  pixel outlines now triangulate cleanly across 144k random scenes.
+
 ## 0.9.3 - 2026-08-14
 
 * Fixed color clustering aborting with `attempt to divide by zero` in

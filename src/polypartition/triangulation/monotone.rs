@@ -1,40 +1,74 @@
 use crate::polypartition::{EdgeVec, Polygon, PolygonInterface};
-use crate::polypartition::util::{add_diagonal, f64_approximately, is_above, is_convex, MonotoneVertex, ScanLineEdge};
+use crate::polypartition::util::{
+    add_diagonal, interior_direction, orient_sign, remove_degenerate_points, resolve_shared_points, split_t_junctions,
+    sweep_before, MonotoneVertex, ScanLineEdge, SweepPoint,
+};
 use crate::polypartition::enums::VertexType;
 
 use crate::PointF64;
 
 pub fn triangulate_mono_vec(polys: Vec<Polygon>) -> Result<Vec<Polygon>, String> {
-    let polys = monotone_partition(polys)?;
+    let pieces = partition(polys)?;
     let mut triangles = vec![];
-    for poly in polys.iter() {
-        triangles.extend(triangulate_mono(poly)?);
+    for piece in pieces.iter() {
+        triangles.extend(triangulate_monotone_points(piece)?);
     }
     Ok(triangles)
 }
 
+/// Takes a polygon monotone in y.
+///
+/// Returns a vec of triangles.
 pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
     if !poly.is_valid() {
         return Err("Input polygon is invalid.");
     }
 
-    let num_points = poly.num_points();
-
     // Trivial case
-    if num_points == 3 {
+    if poly.num_points() == 3 {
         return Ok(vec![poly.clone()]);
     }
-    
+
     let points = &poly.props().points;
+    let n = points.len();
+    let mut sweep: Vec<SweepPoint> = points
+        .iter()
+        .enumerate()
+        .map(|(index, &p)| SweepPoint { p, d: PointF64::default(), index })
+        .collect();
+    // Copies of one point (a pinch) are pulled into their own sectors.
+    for i in 0..n {
+        if (0..n).any(|j| j != i && points[j] == points[i]) {
+            sweep[i].d = interior_direction(&points[(i + n - 1) % n], &points[i], &points[(i + 1) % n]);
+        }
+    }
+    triangulate_monotone_points(&sweep)
+}
+
+/// `a` is later in the sweep than `b` (upstream's `Below`).
+fn later(a: &SweepPoint, b: &SweepPoint) -> bool {
+    sweep_before(b, a)
+}
+
+fn triangulate_monotone_points(points: &[SweepPoint]) -> Result<Vec<Polygon>, &'static str> {
+    let num_points = points.len();
+    if num_points < 3 {
+        return Err("Input polygon is invalid.");
+    }
+    // Trivial case
+    if num_points == 3 {
+        return Ok(vec![Polygon::triangle(points[0].p, points[1].p, points[2].p)]);
+    }
+    let convex = |a: usize, b: usize, c: usize| orient_sign(&points[a], &points[b], &points[c]) > 0;
 
     let mut top_index = 0;
     let mut bottom_index = 0;
     // Find the top-most and bottom-most points
     for i in 1..num_points {
-        if !is_above(&points[i], &points[bottom_index]) {
+        if !later(&points[i], &points[bottom_index]) {
             bottom_index = i;
         }
-        if !is_above(&points[top_index], &points[i]) {
+        if !later(&points[top_index], &points[i]) {
             top_index = i;
         }
     }
@@ -46,7 +80,7 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
         i = top_index;
         while i != bottom_index {
             let i2 = (i+1) % num_points;
-            if is_above(&points[i2], &points[i]) {
+            if later(&points[i2], &points[i]) {
                 return Err("Input polygon is not monotone.");
             }
             i = i2;
@@ -55,7 +89,7 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
         i = bottom_index;
         while i != top_index {
             let i2 = (i+1) % num_points;
-            if is_above(&points[i], &points[i2]) {
+            if later(&points[i], &points[i2]) {
                 return Err("Input polygon is not monotone.");
             }
             i = i2;
@@ -79,7 +113,7 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
             *p = left_index;
             left_index = (left_index+1) % num_points;
             vertex_types[*p] = 1;
-        } else if !is_above(&points[left_index], &points[right_index]) {
+        } else if !later(&points[left_index], &points[right_index]) {
             *p = right_index;
             right_index = if right_index==0 {num_points-1} else {right_index-1};
             vertex_types[*p]  = -1;
@@ -99,6 +133,7 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
     stack[1] = priority[1];
 
     let mut triangles = vec![];
+    let tri = |a: usize, b: usize, c: usize| Polygon::triangle(points[a].p, points[b].p, points[c].p);
 
     // For each vertex from top to bottom trim as many triangles as possible
     for i in 2..(num_points-1) {
@@ -106,13 +141,9 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
         if vertex_types[v_index] != vertex_types[stack[stack_ptr - 1]] {
             for j in 0..(stack_ptr-1) {
                 if vertex_types[v_index] == 1 {
-                    triangles.push(Polygon::triangle(
-                        points[stack[j+1]], points[stack[j]], points[v_index]
-                    ));
+                    triangles.push(tri(stack[j+1], stack[j], v_index));
                 } else {
-                    triangles.push(Polygon::triangle(
-                        points[stack[j]], points[stack[j+1]], points[v_index]
-                    ));
+                    triangles.push(tri(stack[j], stack[j+1], v_index));
                 }
             }
             stack[0] = priority[i-1];
@@ -122,20 +153,16 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
             stack_ptr -= 1;
             while stack_ptr > 0 {
                 if vertex_types[v_index] == 1 {
-                    if is_convex(&points[v_index], &points[stack[stack_ptr - 1]], &points[stack[stack_ptr]]) {
-                        triangles.push(Polygon::triangle(
-                            points[v_index], points[stack[stack_ptr-1]], points[stack[stack_ptr]]
-                        ));
+                    if convex(v_index, stack[stack_ptr - 1], stack[stack_ptr]) {
+                        triangles.push(tri(v_index, stack[stack_ptr-1], stack[stack_ptr]));
                         stack_ptr -= 1;
                     } else {
                         break;
                     }
-                } else if is_convex(&points[v_index], &points[stack[stack_ptr]], &points[stack[stack_ptr - 1]]) {
-                    triangles.push(Polygon::triangle(
-                        points[v_index], points[stack[stack_ptr]], points[stack[stack_ptr-1]]
-                    ));
+                } else if convex(v_index, stack[stack_ptr], stack[stack_ptr - 1]) {
+                    triangles.push(tri(v_index, stack[stack_ptr], stack[stack_ptr-1]));
                     stack_ptr -= 1;
-                } else { 
+                } else {
                     break;
                 }
             }
@@ -146,13 +173,9 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
     let v_index = priority[num_points-1];
     for j in 0..(stack_ptr-1) {
         if vertex_types[stack[j+1]] == 1 {
-            triangles.push(Polygon::triangle(
-                points[stack[j]], points[stack[j+1]], points[v_index]
-            ));
+            triangles.push(tri(stack[j], stack[j+1], v_index));
         } else {
-            triangles.push(Polygon::triangle(
-                points[stack[j+1]], points[stack[j]], points[v_index]
-            ));
+            triangles.push(tri(stack[j+1], stack[j], v_index));
         }
     }
 
@@ -160,22 +183,41 @@ pub fn triangulate_mono(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
 }
 
 pub fn monotone_partition(inpolys: Vec<Polygon>) -> Result<Vec<Polygon>, &'static str> {
+    Ok(partition(inpolys)?
+        .into_iter()
+        .map(|piece| Polygon::from_points_and_is_hole(piece.iter().map(|s| s.p).collect(), false))
+        .collect())
+}
+
+/// Monotone pieces, keeping each point's sweep identity so the pieces are
+/// triangulated under the same perturbation they were cut with.
+fn partition(inpolys: Vec<Polygon>) -> Result<Vec<Vec<SweepPoint>>, &'static str> {
     if inpolys.iter().any(|poly| !poly.is_valid()) {
         return Err("Some input polygon is invalid!");
     }
 
-    let num_vertices = inpolys.iter().fold(0, |acc, poly| acc + poly.num_points());
+    // Repeated points and spike tips enclose nothing; a ring left with fewer
+    // than three points has no area at all.
+    let rings: Vec<Vec<PointF64>> = inpolys
+        .iter()
+        .map(|poly| remove_degenerate_points(&poly.props().points))
+        .filter(|ring| ring.len() >= 3)
+        .collect();
+    // Touching only ever happens at shared vertices from here on.
+    let rings = split_t_junctions(&rings);
+
+    let num_vertices = rings.iter().map(|ring| ring.len()).sum::<usize>();
 
     let max_num_vertices = num_vertices * 3;
     let mut vertices = vec![MonotoneVertex::default(); max_num_vertices];
     let mut new_num_vertices = num_vertices;
 
     let mut poly_start_index = 0;
-    for poly in inpolys.iter() {
-        let num_points = poly.num_points();
+    for ring in rings.iter() {
+        let num_points = ring.len();
         let poly_end_index = poly_start_index + num_points - 1;
         for i in 0..num_points {
-            vertices[i + poly_start_index].p = poly.get_point(i);
+            vertices[i + poly_start_index].p = ring[i];
             if i == 0 {
                 vertices[i + poly_start_index].previous = poly_end_index;
             } else {
@@ -190,40 +232,37 @@ pub fn monotone_partition(inpolys: Vec<Polygon>) -> Result<Vec<Polygon>, &'stati
         poly_start_index = poly_end_index + 1;
     }
 
+    resolve_shared_points(&mut vertices, num_vertices);
+
+    let sp = |vertices: &[MonotoneVertex], i: usize| vertices[i].sweep_point(i);
+
     let mut priority: Vec<usize> = (0..num_vertices).collect();
     priority.sort_by(|&index1, &index2| {
-        let p1 = vertices[index1].p;
-        let p2 = vertices[index2].p;
-        let result;
-        // Primary key is y, secondary key is x
-        if !f64_approximately(p1.y, p2.y) {
-            result = p1.y.partial_cmp(&p2.y).unwrap();
-        } else {
-            result = p1.x.partial_cmp(&p2.x).unwrap();
-        }
-        // Sort in falling order
-        if let std::cmp::Ordering::Less = result {
+        let (p1, p2) = (sp(&vertices, index1), sp(&vertices, index2));
+        if sweep_before(&p1, &p2) {
+            std::cmp::Ordering::Less
+        } else if sweep_before(&p2, &p1) {
             std::cmp::Ordering::Greater
         } else {
-            std::cmp::Ordering::Less
+            std::cmp::Ordering::Equal
         }
     });
 
     // Determine vertex types
     let mut vertex_types = vec![VertexType::Null; max_num_vertices];
     for i in 0..num_vertices {
-        let v = &vertices[i];
-        let v_prev = &vertices[v.previous];
-        let v_next = &vertices[v.next];
+        let v = sp(&vertices, i);
+        let v_prev = sp(&vertices, vertices[i].previous);
+        let v_next = sp(&vertices, vertices[i].next);
 
-        if is_above(&v_prev.p, &v.p) && is_above(&v_next.p, &v.p) {
-            if is_convex(&v_next.p, &v_prev.p, &v.p) {
+        if later(&v_prev, &v) && later(&v_next, &v) {
+            if orient_sign(&v_next, &v_prev, &v) > 0 {
                 vertex_types[i] = VertexType::Start;
             } else {
                 vertex_types[i] = VertexType::Split;
             }
-        } else if is_above(&v.p, &v_prev.p) && is_above(&v.p, &v_next.p) {
-            if is_convex(&v_next.p, &v_prev.p, &v.p) {
+        } else if later(&v, &v_prev) && later(&v, &v_next) {
+            if orient_sign(&v_next, &v_prev, &v) > 0 {
                 vertex_types[i] = VertexType::End;
             } else {
                 vertex_types[i] = VertexType::Merge;
@@ -233,70 +272,67 @@ pub fn monotone_partition(inpolys: Vec<Polygon>) -> Result<Vec<Polygon>, &'stati
         }
     }
 
-    // Correct up to this point
-
     let mut helpers = vec![0; max_num_vertices];
 
     let mut edge_tree = EdgeVec::default();
     let mut edge_tree_pointers = vec![None; max_num_vertices];
 
+    let edge_from = |vertices: &[MonotoneVertex], i: usize| {
+        let next = vertices[i].next;
+        ScanLineEdge {
+            index: i,
+            p1: vertices[i].p,
+            p2: vertices[next].p,
+            d1: vertices[i].d,
+            d2: vertices[next].d,
+        }
+    };
+
     for &v_index in priority.iter() {
         let v = &vertices[v_index].clone();
+        let v_point = sp(&vertices, v_index);
         let mut v_index2 = v_index;
-        let mut v2 = v;
 
         // Depending on the vertex type, do the appropriate action
         match vertex_types[v_index] {
-            VertexType::Null => {panic!()},
+            VertexType::Null => return Err("Vertex type is not set."),
             VertexType::Start => {
-                let mut new_edge = ScanLineEdge::default();
-                new_edge.p1 = v.p;
-                new_edge.p2 = vertices[v.next].p;
-                new_edge.index = v_index;
-                let ptr = edge_tree.insert(new_edge);
-                edge_tree_pointers[v_index] = ptr;
+                let ptr = edge_tree.push(edge_from(&vertices, v_index));
+                edge_tree_pointers[v_index] = Some(ptr);
                 helpers[v_index] = v_index;
             },
             VertexType::End => {
                 if edge_tree_pointers[v.previous].is_none() {
                     return Err("Pointer is NULL.");
                 }
-                
+
                 if let VertexType::Merge = vertex_types[helpers[v.previous]] {
                     add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helpers[v.previous],
                         &mut vertex_types, &mut edge_tree_pointers, &mut helpers);
                 }
 
                 if let Some(ptr) = &edge_tree_pointers[v.previous] {
-                    edge_tree.remove(&ptr.borrow());
+                    edge_tree.remove_ptr(ptr);
                 }
                 edge_tree_pointers[v.previous] = None;
             },
             VertexType::Split => {
-                let mut new_edge = ScanLineEdge::default();
-                new_edge.p1 = v.p;
-                new_edge.p2 = v.p;
-                let mut edge_pos_index = edge_tree.lower_bound(&new_edge);
-                if edge_pos_index == 0 {
-                    return Err("edge_iter is the first in EdgeTree.");
-                }
-                edge_pos_index -= 1;
+                let edge = match edge_tree.left_of(&v_point) {
+                    Some(edge) => edge,
+                    None => return Err("edge_iter is the first in EdgeTree."),
+                };
 
-                let index = edge_tree.get_edge_copy(edge_pos_index).unwrap().index;
-
-                add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helpers[index],
+                let helper = helpers[edge.borrow().index];
+                add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helper,
                     &mut vertex_types, &mut edge_tree_pointers, &mut helpers);
 
                 v_index2 = new_num_vertices - 2;
-                v2 = &vertices[v_index2];
-                helpers[index] = v_index;
+                // add_diagonal may have handed the edge to a new copy of its
+                // vertex; upstream re-reads it through the iterator too.
+                helpers[edge.borrow().index] = v_index;
 
-                let mut new_edge = ScanLineEdge::default();
-                new_edge.p1 = v2.p;
-                new_edge.p2 = vertices[v2.next].p;
-                new_edge.index = v_index2;
-                let ptr = edge_tree.insert(new_edge);
-                edge_tree_pointers[v_index2] = ptr;
+                let ptr = edge_tree.push(edge_from(&vertices, v_index2));
+                edge_tree_pointers[v_index2] = Some(ptr);
                 helpers[v_index2] = v_index2;
             },
             VertexType::Merge => {
@@ -304,39 +340,32 @@ pub fn monotone_partition(inpolys: Vec<Polygon>) -> Result<Vec<Polygon>, &'stati
                     return Err("Pointer is NULL.");
                 }
 
-                #[allow(unused_assignments)]
                 if let VertexType::Merge = vertex_types[helpers[v.previous]] {
                     add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helpers[v.previous],
                         &mut vertex_types, &mut edge_tree_pointers, &mut helpers);
                     v_index2 = new_num_vertices - 2;
-                    v2 = &vertices[v_index2]; // False alarm here?
                 }
 
                 if let Some(ptr) = &edge_tree_pointers[v.previous] {
-                    edge_tree.remove(&ptr.borrow());
+                    edge_tree.remove_ptr(ptr);
                 }
                 edge_tree_pointers[v.previous] = None;
 
-                let mut new_edge = ScanLineEdge::default();
-                new_edge.p1 = v.p;
-                new_edge.p2 = v.p;
-                let mut edge_pos_index = edge_tree.lower_bound(&new_edge);
-                if edge_pos_index == 0 {
-                    return Err("edge_iter is the first in EdgeTree.");
-                }
-                edge_pos_index -= 1;
+                let edge = match edge_tree.left_of(&v_point) {
+                    Some(edge) => edge,
+                    None => return Err("edge_iter is the first in EdgeTree."),
+                };
 
-                let index = edge_tree.get_edge_copy(edge_pos_index).unwrap().index;
-
-                if let VertexType::Merge = vertex_types[helpers[index]] {
-                    add_diagonal(&mut vertices, &mut new_num_vertices, v_index2, helpers[index],
+                let helper = helpers[edge.borrow().index];
+                if let VertexType::Merge = vertex_types[helper] {
+                    add_diagonal(&mut vertices, &mut new_num_vertices, v_index2, helper,
                         &mut vertex_types, &mut edge_tree_pointers, &mut helpers);
                 }
 
-                helpers[index] = v_index2;
+                helpers[edge.borrow().index] = v_index2;
             },
             VertexType::Regular => {
-                if is_above(&v.p, &vertices[v.previous].p) {
+                if later(&v_point, &sp(&vertices, v.previous)) {
                     if edge_tree_pointers[v.previous].is_none() {
                         return Err("Pointer is NULL.");
                     }
@@ -345,37 +374,30 @@ pub fn monotone_partition(inpolys: Vec<Polygon>) -> Result<Vec<Polygon>, &'stati
                         add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helpers[v.previous],
                             &mut vertex_types, &mut edge_tree_pointers, &mut helpers);
                         v_index2 = new_num_vertices - 2;
-                        v2 = &vertices[v_index2];
                     }
 
                     if let Some(ptr) = &edge_tree_pointers[v.previous] {
-                        edge_tree.remove(&ptr.borrow());
+                        edge_tree.remove_ptr(ptr);
                     }
 
-                    let mut new_edge = ScanLineEdge::default();
-                    new_edge.p1 = v2.p;
-                    new_edge.p2 = vertices[v2.next].p;
-                    new_edge.index = v_index2;
-                    let ptr = edge_tree.insert(new_edge);
-                    edge_tree_pointers[v_index2] = ptr;
-                    helpers[v_index2] = v_index;
+                    let ptr = edge_tree.push(edge_from(&vertices, v_index2));
+                    edge_tree_pointers[v_index2] = Some(ptr);
+                    // Upstream sets this to v_index, but after a merge diagonal that
+                    // copy belongs to the piece just closed off above; a later
+                    // diagonal to it would sew the pieces back together.
+                    helpers[v_index2] = v_index2;
                 } else {
-                    let mut new_edge = ScanLineEdge::default();
-                    new_edge.p1 = v.p;
-                    new_edge.p2 = v.p;
-                    let mut edge_pos_index = edge_tree.lower_bound(&new_edge);
-                    if edge_pos_index == 0 {
-                        return Err("edge_iter is the first in EdgeTree.");
-                    }
-                    edge_pos_index -= 1;
+                    let edge = match edge_tree.left_of(&v_point) {
+                        Some(edge) => edge,
+                        None => return Err("edge_iter is the first in EdgeTree."),
+                    };
 
-                    let index = edge_tree.get_edge_copy(edge_pos_index).unwrap().index;
-
-                    if let VertexType::Merge = vertex_types[helpers[index]] {
-                        add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helpers[index],
+                    let helper = helpers[edge.borrow().index];
+                    if let VertexType::Merge = vertex_types[helper] {
+                        add_diagonal(&mut vertices, &mut new_num_vertices, v_index, helper,
                             &mut vertex_types, &mut edge_tree_pointers, &mut helpers);
                     }
-                    helpers[index] = v_index;
+                    helpers[edge.borrow().index] = v_index;
                 }
             },
         }
@@ -384,34 +406,21 @@ pub fn monotone_partition(inpolys: Vec<Polygon>) -> Result<Vec<Polygon>, &'stati
     let mut monotone_polys = vec![];
 
     let mut used = vec![false; new_num_vertices];
-    let mut size;
     for i in 0..new_num_vertices {
         if used[i] {
             continue;
         }
-        let v = &vertices[i];
-        let mut v_next = &vertices[v.next];
-        size = 1;
-        while v_next != v {
-            v_next = &vertices[v_next.next];
-            size += 1;
+        let mut piece = vec![];
+        let mut v = i;
+        loop {
+            used[v] = true;
+            piece.push(sp(&vertices, v));
+            v = vertices[v].next;
+            if v == i {
+                break;
+            }
         }
-
-        let mut points = vec![PointF64::default(); size];
-        let v = &vertices[i];
-        points[0] = v.p;
-        let mut v_next = &vertices[v.next];
-        size = 1;
-        used[i] = true;
-        used[v.next] = true;
-        while v_next != v {
-            points[size] = v_next.p;
-            used[v_next.next] = true;
-            v_next = &vertices[v_next.next];
-            size += 1;
-        }
-
-        monotone_polys.push(Polygon::from_points_and_is_hole(points, false));
+        monotone_polys.push(piece);
     }
     Ok(monotone_polys)
 }

@@ -1,5 +1,5 @@
 use crate::polypartition::{Polygon, PolygonInterface};
-use crate::polypartition::util::{Diagonal, distance, DPState, is_in_cone, intersects};
+use crate::polypartition::util::{Diagonal, distance, DPState, is_in_cone, remove_degenerate_points, resolve_pinches, segment_blocks};
 
 use std::collections::VecDeque;
 
@@ -18,18 +18,38 @@ pub fn triangulate_opt_vec(polys: Vec<Polygon>) -> Result<Vec<Polygon>, String> 
 ///
 /// Returns a vec of triangles.
 pub fn triangulate_opt(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
+    triangulate_opt_static(poly)
+}
+
+fn triangulate_opt_static(poly: &Polygon) -> Result<Vec<Polygon>, &'static str> {
     if !poly.is_valid() {
         return Err("Input polygon is invalid.");
     }
 
     let mut triangles = vec![];
-    let num_vertices = poly.num_points();
-
-    // Just in case (should be guarded above)
-    if num_vertices < 3 {
-        return Err("Input polygon has less than 3 vertices");
-    }
     // Trivial case
+    if poly.num_points() == 3 {
+        return Ok(vec![poly.clone()]);
+    }
+
+    // Repeated points and spike tips enclose nothing, and no diagonal can
+    // cut them off; without them the polygon has the same area.
+    let cleaned = remove_degenerate_points(&poly.props().points);
+    let num_vertices = cleaned.len();
+    if num_vertices < 3 {
+        return Ok(triangles);
+    }
+    // A ring touching itself with overlapping wedges: split it first.
+    let rings = resolve_pinches(&cleaned);
+    if rings.len() > 1 {
+        for ring in rings {
+            if ring.len() >= 3 {
+                triangles.extend(triangulate_opt_static(&Polygon::from_points_and_is_hole(ring, false))?);
+            }
+        }
+        return Ok(triangles);
+    }
+    let poly = &Polygon::from_points_and_is_hole(cleaned, poly.is_hole());
     if num_vertices == 3 {
         return Ok(vec![poly.clone()]);
     }
@@ -68,7 +88,7 @@ pub fn triangulate_opt(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
                 for k in 0..num_vertices {
                     let p3 = poly.get_point(k);
                     let p4 = poly.get_point((k+1) % num_vertices);
-                    if intersects(&p1, &p2, &p3, &p4) {
+                    if segment_blocks(&p1, &p2, &p3, &p4) {
                         dp_states[j][i].visible = false;
                         break;
                     }

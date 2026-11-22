@@ -1,4 +1,5 @@
-use crate::polypartition::{PartitionVertex, PartitionVertexInfo, Polygon, PolygonInterface, util::update_vertex};
+use crate::polypartition::{PartitionVertex, PartitionVertexInfo, Polygon, PolygonInterface};
+use crate::polypartition::util::{is_degenerate_vertex, orient, resolve_pinches, update_vertex};
 
 pub fn triangulate_ec_vec(polys: Vec<Polygon>) -> Result<Vec<Polygon>, String> {
     let mut triangles = vec![];
@@ -12,6 +13,10 @@ pub fn triangulate_ec_vec(polys: Vec<Polygon>) -> Result<Vec<Polygon>, String> {
 ///
 /// Returns a vec of triangles.
 pub fn triangulate_ec(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
+    triangulate_ec_static(poly)
+}
+
+fn triangulate_ec_static(poly: &Polygon) -> Result<Vec<Polygon>, &'static str> {
     if !poly.is_valid() {
         return Err("Input polygon is invalid.");
     }
@@ -26,6 +31,20 @@ pub fn triangulate_ec(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
     // Trivial case
     if num_vertices == 3 {
         return Ok(vec![poly.clone()]);
+    }
+
+    // Where the ring passes through a point twice with overlapping wedges
+    // (holes bridged in separately that touch each other or the outline),
+    // no ear test based on the ring's own local geometry is sound. Split it
+    // there into rings that only meet at clean pinches.
+    let rings = resolve_pinches(&poly.props().points);
+    if rings.len() > 1 {
+        for ring in rings {
+            if ring.len() >= 3 {
+                triangles.extend(triangulate_ec_static(&Polygon::from_points_and_is_hole(ring, false))?);
+            }
+        }
+        return Ok(triangles);
     }
 
     let mut vertices = vec![PartitionVertex::default(); num_vertices];
@@ -50,39 +69,54 @@ pub fn triangulate_ec(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
             vertex.previous= i-1; // Just the previous
         }
     }
+    let mut num_active = num_vertices;
+
+    // Repeated points and zero-width spikes enclose nothing; drop them first
+    // so they can neither become ears nor block real ones.
+    for i in 0..num_vertices {
+        prune_degenerate(i, &mut vertices, &mut num_active);
+    }
 
     // Update the angles and is_ear the first time
     for i in 0..num_vertices {
-        update_vertex(i, &mut vertices);
+        if vertices[i].info.is_active {
+            update_vertex(i, &mut vertices);
+        }
     }
 
-    for i in 0..(num_vertices-3) {
+    while num_active > 3 {
         // Find optimal ear
-        let ear = vertices.iter().enumerate().fold(
-            None,
-            |optimal_ear, (i, vertex)| {
-                if !vertex.info.is_active {
-                    return optimal_ear;
-                }
-                if !vertex.info.is_ear {
-                    return optimal_ear;
-                }
-                if optimal_ear.is_none() {
-                    return Some(i);
-                }
-                let optimal_ear_i = optimal_ear.unwrap();
-                let optimal_ear_angle = vertices[optimal_ear_i].info.angle;
-                if vertex.info.angle > optimal_ear_angle {
-                    Some(i)
-                } else {
-                    Some(optimal_ear_i)
+        let mut ear = find_ear(&vertices);
+        if ear.is_none() {
+            // Ear flags are only refreshed next to a clipped ear, so one may
+            // still be blocked by a vertex that has since gone.
+            for i in 0..num_vertices {
+                if vertices[i].info.is_active {
+                    update_vertex(i, &mut vertices);
                 }
             }
-        );
-        if ear.is_none() {
-            return Err("No ear found!");
+            ear = find_ear(&vertices);
         }
-        let ear = ear.unwrap();
+        let ear = match ear {
+            Some(ear) => ear,
+            None => {
+                // A straight vertex is never an ear, but removing it does not
+                // change the polygon and may unblock one.
+                let straight = (0..num_vertices).find(|&i| {
+                    let v = &vertices[i];
+                    v.info.is_active
+                        && orient(&vertices[v.previous].info.p, &v.info.p, &vertices[v.next].info.p) == 0.0
+                });
+                match straight {
+                    Some(v) => {
+                        let (prev, next) = unlink(v, &mut vertices, &mut num_active);
+                        refresh(prev, next, &mut vertices, &mut num_active);
+                        continue;
+                    }
+                    None => return Err("No ear found!"),
+                }
+            }
+        };
         let prev = vertices[ear].previous;
         let next = vertices[ear].next;
 
@@ -92,29 +126,87 @@ pub fn triangulate_ec(poly: &Polygon) -> Result<Vec<Polygon>, &str> {
             vertices[next].info.p,
         ));
 
-        vertices[ear].info.is_active = false;
-        // Tighten the loose ends
-        vertices[prev].next = next;
-        vertices[next].previous = prev;
+        unlink(ear, &mut vertices, &mut num_active);
 
-        if i == (num_vertices - 4) {
+        if num_active == 3 {
             break;
         }
 
-        update_vertex(prev, &mut vertices);
-        update_vertex(next, &mut vertices);
+        refresh(prev, next, &mut vertices, &mut num_active);
     }
 
-    for vertex in vertices.iter() {
-        if vertex.info.is_active {
-            triangles.push(Polygon::triangle(
-            vertices[vertex.previous].info.p,
-            vertex.info.p,
-            vertices[vertex.next].info.p,
-            ));
-            break;
+    if num_active == 3 {
+        for vertex in vertices.iter() {
+            if vertex.info.is_active {
+                let (a, b, c) = (vertices[vertex.previous].info.p, vertex.info.p, vertices[vertex.next].info.p);
+                if orient(&a, &b, &c) != 0.0 {
+                    triangles.push(Polygon::triangle(a, b, c));
+                }
+                break;
+            }
         }
     }
 
     Ok(triangles)
+}
+
+/// The convex ear with the sharpest angle; the first such on ties.
+fn find_ear(vertices: &[PartitionVertex]) -> Option<usize> {
+    let mut optimal_ear: Option<usize> = None;
+    for (i, vertex) in vertices.iter().enumerate() {
+        if !vertex.info.is_active || !vertex.info.is_ear {
+            continue;
+        }
+        match optimal_ear {
+            Some(o) if vertex.info.angle <= vertices[o].info.angle => {}
+            _ => optimal_ear = Some(i),
+        }
+    }
+    optimal_ear
+}
+
+/// Removes `v` from the ring; returns its former neighbours.
+fn unlink(v: usize, vertices: &mut [PartitionVertex], num_active: &mut usize) -> (usize, usize) {
+    let prev = vertices[v].previous;
+    let next = vertices[v].next;
+    vertices[v].info.is_active = false;
+    // Tighten the loose ends
+    vertices[prev].next = next;
+    vertices[next].previous = prev;
+    *num_active -= 1;
+    (prev, next)
+}
+
+/// Drops `v` and then its neighbours, transitively, while they are degenerate.
+/// Returns the vertices examined that are still in the ring: the new seam.
+fn prune_degenerate(v: usize, vertices: &mut [PartitionVertex], num_active: &mut usize) -> Vec<usize> {
+    let mut seam = vec![];
+    let mut stack = vec![v];
+    while let Some(v) = stack.pop() {
+        if !vertices[v].info.is_active {
+            continue;
+        }
+        if *num_active <= 2 || !is_degenerate_vertex(v, vertices) {
+            seam.push(v);
+            continue;
+        }
+        let (prev, next) = unlink(v, vertices, num_active);
+        stack.push(prev);
+        stack.push(next);
+    }
+    seam
+}
+
+/// Re-evaluates the vertices that just became adjacent.
+fn refresh(prev: usize, next: usize, vertices: &mut Vec<PartitionVertex>, num_active: &mut usize) {
+    let mut seam = prune_degenerate(prev, vertices, num_active);
+    seam.extend(prune_degenerate(next, vertices, num_active));
+    if *num_active < 3 {
+        return;
+    }
+    for v in seam {
+        if vertices[v].info.is_active {
+            update_vertex(v, vertices);
+        }
+    }
 }

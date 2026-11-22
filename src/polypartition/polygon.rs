@@ -119,9 +119,9 @@ impl PolygonProps {
             area += curr_pt.x * next_pt.y - curr_pt.y * next_pt.x;
         }
 
-        if area.is_sign_positive() {
+        if area > 0.0 {
             Orientation::CounterClockwise
-        } else if area.is_sign_negative() {
+        } else if area < 0.0 {
             Orientation::Clockwise
         } else {
             Orientation::None
