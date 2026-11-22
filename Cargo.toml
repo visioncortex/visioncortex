@@ -12,6 +12,7 @@ keywords = ["computer-graphics", "computer-vision"]
 exclude = [
     "docs/*",
     "tests/parity/*",
+    "fuzz/*",
 ]
 
 [dependencies]

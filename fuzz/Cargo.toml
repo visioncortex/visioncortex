@@ -1,0 +1,22 @@
+[package]
+name = "polypartition-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Render -> cluster -> triangulate -> re-render fuzzer for visioncortex::polypartition"
+
+# Standalone: keep librsvg and its GTK-stack deps out of the root workspace
+# and the root Cargo.lock.
+[workspace]
+
+[dependencies]
+visioncortex = { path = ".." }
+librsvg = "2.63"
+cairo-rs = { version = "0.22", features = ["png"] }
+gio = "0.22"
+glib = "0.22"
+
+[profile.release]
+debug = 1
+overflow-checks = true
+debug-assertions = true
