@@ -1,4 +1,4 @@
-use crate::Point2;
+use crate::{DetermMath, Point2};
 use num_traits::Float;
 
 /// Polar coordinate in 2D space
@@ -10,11 +10,11 @@ pub struct Polar2<F: Float> {
     pub r: F,
 }
 
-impl<F: Float> Polar2<F> {
+impl<F: Float + DetermMath> Polar2<F> {
     pub fn to_point(&self) -> Point2<F> {
         Point2 {
-            x: self.r * self.a.cos(),
-            y: self.r * self.a.sin(),
+            x: self.r * self.a.determ_cos(),
+            y: self.r * self.a.determ_sin(),
         }
     }
 }
